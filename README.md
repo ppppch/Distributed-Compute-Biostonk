@@ -1,8 +1,4 @@
-# Distributed Inference Project — How the Data Flows
-
-This document walks through the full journey of the project, start to finish, with every term tied to exactly where it shows up in the code.
-
-## The complete data flow
+# How the Data Flows
 
 ### Stage 1: Raw data exists
 
@@ -30,7 +26,7 @@ At this point, nothing has been "learned" yet — this is purely organizing raw 
 from sklearn.ensemble import RandomForestClassifier
 ```
 
-This brings in the **method** for learning — an empty, reusable process. It knows nothing about digits yet. It's the same import you'd use for a completely different dataset.
+This brings in the **method** for learning. It's an empty, reusable process. It knows nothing about digits yet.
 
 ↓
 
@@ -51,7 +47,7 @@ This is the one moment where **data** and **algorithm** combine:
 joblib.dump(model, "baseline_model.joblib")
 ```
 
-That model gets saved to a file. From this point forward, this file **is** the model — frozen, reusable, and never retrained again in your project.
+That model gets saved to a file. From this point forward, this file **is** the model. It is reusable, and never retrained again in your project.
 
 ↓
 
@@ -77,7 +73,7 @@ accuracy = (predictions == y_job).mean()          # compare guesses to real answ
 pred_hash = hashlib.sha256(predictions.tobytes())  # fingerprint the guesses
 ```
 
-This is the only place `y_job` (the real answers for the job data) actually gets used — purely to grade the model afterward, never during prediction itself.
+This is the only place `y_job` (the real answers for the job data) actually gets used. Used to grade the model afterwards.
 
 ---
 
@@ -101,5 +97,3 @@ Raw labeled images
 | **Model** | The saved, specific result of training | Created once, reused forever after |
 | **Inference** | Model + new unlabeled data → predictions | Happens every time you `predict()` — this is what you're distributing |
 | **Verification** | Predictions vs. real answers | Happens after inference, to check correctness |
-
-This is also exactly why your project is called *distributed **inference*** and not distributed training — you're only splitting up Stage 5 (running the frozen model on data) across two computers. Stages 1–4 (data prep and training) only ever happen once, on one machine, before any distribution even begins.
