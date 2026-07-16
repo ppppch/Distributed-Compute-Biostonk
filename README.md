@@ -14,7 +14,7 @@ Runs the distributed (simulated) phase, in order: `split_job.py` → `run_worker
 ```
 make clean
 ```
-Deletes every generated file (`.npz`, `.joblib`, `.json`) so you can start fresh. Your actual scripts are never touched.
+Deletes every generated file (`.npz`, `.joblib`, `.json`).
 
 You can also run any single step on its own:
 
@@ -33,8 +33,6 @@ make baseline
 make workers
 python3 combine_and_verify.py
 ```
-
-`combine_and_verify.py` isn't wired into the Makefile yet — run it manually as the last step to reassemble both workers' results and check the fingerprint against the baseline.
 
 
 
