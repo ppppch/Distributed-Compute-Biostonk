@@ -13,3 +13,8 @@ baseline_run:
 #Runs all three, in order, one after another
 baseline: prepare train baseline_run
 	@echo "Baseline pipeline complete."
+
+#Removes all the files that are generated
+clean:
+	rm -f train.npz job.npz baseline_model.joblib baseline_predictions.npz baseline_report.json
+	@echo "Cleaned up generated files."
