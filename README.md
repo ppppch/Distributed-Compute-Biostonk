@@ -1,6 +1,4 @@
-# How the Data Flows
-
-## How to Run
+# How to Run
 ```
 make baseline
 ```
@@ -35,7 +33,7 @@ python3 combine_and_verify.py
 ```
 
 
-
+# How the Data Moves
 ### Stage 1: Raw data exists
 
 **1,797 handwritten digit images**, each one already labeled with its correct answer (a real person confirmed "this is a 3," etc.)
