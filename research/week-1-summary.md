@@ -13,8 +13,9 @@ digits dataset:
    fingerprint to `baseline_report.json`.
 4. `split_job.py` — divides `job.npz` into two chunks while preserving
    `original_index`.
-5. `run_worker1.py` / `run_worker2.py` — each worker loads the same frozen
-   model and predicts on only its own chunk.
+5. `run_worker.py` — single reusable worker script that loads the same frozen
+   model and predicts on one chunk at a time (replaces `run_worker1.py` /
+   `run_worker2.py`).
 6. `combine_and_verify.py` — reassembles predictions by `original_index`,
    recomputes the fingerprint, and checks it against the baseline.
 

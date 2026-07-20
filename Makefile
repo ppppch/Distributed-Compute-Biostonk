@@ -11,10 +11,10 @@ baseline_run:
 	python3 run_baseline.py
 
 worker1:
-	python3 run_worker1.py
+	python3 run_worker.py job_part1.npz results_part1.npz --label "Part 1"
 
 worker2:
-	python3 run_worker2.py
+	python3 run_worker.py job_part2.npz results_part2.npz --label "Part 2"
 
 split:
 	python3 split_job.py
@@ -26,6 +26,9 @@ baseline: prepare train baseline_run
 #Splits then runs both workers
 workers: split worker1 worker2
 	@echo "Split, workers ran, computers simulated."
+
+test:
+	python3 -m unittest discover -s tests -v
 
 #Runs all
 all: baseline workers

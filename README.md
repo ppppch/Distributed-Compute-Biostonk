@@ -7,12 +7,17 @@ Runs the single-computer phase, in order: `prepare_dataset.py` → `train_model.
 ```
 make workers
 ```
-Runs the distributed (simulated) phase, in order: `split_job.py` → `run_worker1.py` → `run_worker2.py`. Splits the job into two chunks and processes each one independently, as if on two separate computers.
+Runs the distributed (simulated) phase, in order: `split_job.py` → `run_worker.py` (twice, once per chunk). Splits the job into two chunks and processes each one independently, as if on two separate computers.
 
 ```
 make clean
 ```
 Deletes every generated file (`.npz`, `.joblib`, `.json`).
+
+```
+make test
+```
+Runs the unit and integration tests in `tests/`.
 
 You can also run any single step on its own:
 
@@ -23,6 +28,7 @@ make baseline_run
 make split
 make worker1
 make worker2
+make test
 ```
 
 **Typical full run, start to finish:**
@@ -125,9 +131,10 @@ Each chunk also stores its `original_index` — the position each image held in 
 
 ↓
 
-### Stage 8: Distributed inference — same model, two chunks (`run_worker1.py`, `run_worker2.py`)
+### Stage 8: Distributed inference — same model, two chunks (`run_worker.py`)
 
 ```python
+# run_worker.py is invoked once per chunk with different input/output paths.
 model = joblib.load("baseline_model.joblib")   # the SAME frozen model, no retraining
 data = np.load("job_part1.npz")                # only this chunk -- no knowledge of the other
 predictions = model.predict(data["X"])          # INFERENCE, run independently per chunk
