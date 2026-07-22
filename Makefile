@@ -34,6 +34,11 @@ all: baseline workers
 demo: all
 	python3 combine_and_verify.py
 
+#Runs full pipeline, injects a fault, and shows verification rejection
+demo-fail: all
+	python3 inject_fault.py
+	python3 combine_and_verify.py
+
 #Removes all the files that are generated
 clean:
 	rm -f train.npz job.npz baseline_model.joblib baseline_predictions.npz baseline_report.json job_part1.npz job_part2.npz results_part1.npz results_part2.npz
