@@ -9,7 +9,196 @@ The old two-file simulation in `simulation/` is no longer used; it’s just kept
 
 ---
 
-## What each part does
+## What you need first
+
+Install these on whichever computer runs the baseline and the client:
+
+```bash
+pip install requests numpy scikit-learn joblib
+```
+
+The server only needs:
+
+```bash
+pip install fastapi uvicorn scikit-learn numpy joblib
+```
+
+(or run `pip install -r server/requirements.txt` from the server folder).
+
+---
+
+## Step 0: Build the baseline
+
+On **one** computer (it can be the client, the server, or a third machine), run:
+
+```bash
+make baseline
+```
+
+You should see output like this:
+
+```
+Train set: 1257 samples -> train.npz
+Job set:   540 samples -> job.npz
+Model trained and saved to baseline_model.joblib
+Processed 540 samples in ...
+Accuracy: 0.9667
+Fingerprint (hash): a4b7968caf3ccc0f397d81d2ed7e4acbedf7fec14c86596e4a116b1172ceadd4
+Baseline pipeline complete. Model saved to shared/baseline_model.joblib
+```
+
+This creates three things you need for the distributed run:
+
+- `shared/baseline_model.joblib` — the trained model
+- `baseline/job.npz` — the 540 images that will be split across machines
+- `baseline/baseline_report.json` — the answer key/hash
+
+---
+
+## Quick test: one computer, two terminals
+
+You can test the whole two-machine flow on a single computer using two terminal windows.
+
+### Terminal 1 — start the server
+
+```bash
+cd server
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+You should see:
+
+```
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+Leave this running.
+
+### Terminal 2 — run the client
+
+From the project root:
+
+```bash
+make split
+make worker_local
+cd client
+python3 send_to_server.py --url http://127.0.0.1:8000/predict
+python3 combine_and_verify.py
+```
+
+Expected final output:
+
+```
+Sent 270 samples to http://127.0.0.1:8000/predict (Part 2)
+Baseline hash:    a4b7968caf3ccc0f397d81d2ed7e4acbedf7fec14c86596e4a116b1172ceadd4
+Distributed hash: a4b7968caf3ccc0f397d81d2ed7e4acbedf7fec14c86596e4a116b1172ceadd4
+MATCH - distributed results are identical to the baseline.
+```
+
+The hash on your machine may be different, but the important part is `MATCH`.
+
+To stop the server, go back to Terminal 1 and press `Ctrl + C`.
+
+---
+
+## Real test: two separate computers
+
+### Computer A — the server
+
+1. Copy these to the server computer, keeping the same folder layout:
+
+   ```
+   server/
+   shared/baseline_model.joblib
+   ```
+
+   So the server folder looks like:
+
+   ```
+   server/
+     server.py
+     requirements.txt
+   shared/
+     baseline_model.joblib
+   ```
+
+2. Install server dependencies:
+
+   ```bash
+   cd server
+   pip install -r requirements.txt
+   ```
+
+3. Start the server:
+
+   ```bash
+   uvicorn server:app --host 0.0.0.0 --port 8000
+   ```
+
+   Note the server’s IP address (for example, `192.168.1.50`).
+
+### Computer B — the client
+
+1. Copy these to the client computer, keeping the same folder layout:
+
+   ```
+   client/
+   baseline/
+   shared/baseline_model.joblib
+   Makefile
+   ```
+
+   So the client folder looks like:
+
+   ```
+   client/
+     split_job.py
+     run_worker_local.py
+     send_to_server.py
+     combine_and_verify.py
+   baseline/
+     job.npz
+     baseline_report.json
+   shared/
+     baseline_model.joblib
+   Makefile
+   ```
+
+2. Install client dependencies:
+
+   ```bash
+   pip install requests numpy scikit-learn joblib
+   ```
+
+3. Run the client pipeline. Replace `<server-ip>` with the server’s actual IP:
+
+   ```bash
+   make split
+   make worker_local
+   cd client
+   python3 send_to_server.py --url http://<server-ip>:8000/predict
+   python3 combine_and_verify.py
+   ```
+
+   Example:
+
+   ```bash
+   python3 send_to_server.py --url http://192.168.1.50:8000/predict
+   ```
+
+4. You should see:
+
+   ```
+   Sent 270 samples to http://192.168.1.50:8000/predict (Part 2)
+   Baseline hash:    ...
+   Distributed hash: ...
+   MATCH - distributed results are identical to the baseline.
+   ```
+
+---
+
+## What each file does
 
 | File | Purpose |
 |---|---|
@@ -24,60 +213,7 @@ The old two-file simulation in `simulation/` is no longer used; it’s just kept
 
 ---
 
-## How to run
-
-### 1. Build the baseline (on one computer)
-
-```bash
-make baseline
-```
-
-This produces:
-
-- `baseline/job.npz` — the 540 images to distribute
-- `baseline/baseline_report.json` — the answer key/hash
-- `shared/baseline_model.joblib` — the trained model
-
-### 2. Set up the server computer
-
-Copy `server/` and `shared/baseline_model.joblib` to the server.
-
-```bash
-cd server
-pip install -r requirements.txt
-uvicorn server:app --host 0.0.0.0 --port 8000
-```
-
-The server is now listening at `http://<server-ip>:8000`.
-
-### 3. Set up the client computer
-
-Copy `client/` and `shared/baseline_model.joblib` to the client.
-Also copy `baseline/job.npz` and `baseline/baseline_report.json` so the client can split and verify.
-
-Install the client dependencies:
-
-```bash
-pip install requests numpy scikit-learn joblib
-```
-
-Run the client pipeline:
-
-```bash
-make split
-make worker_local
-cd client
-python3 send_to_server.py --url http://<server-ip>:8000/predict
-python3 combine_and_verify.py
-```
-
-If you are testing on one computer, use two terminal windows and replace `<server-ip>` with `127.0.0.1`.
-
----
-
-## Using the pieces directly
-
-### Server endpoint
+## Using the server API directly
 
 `POST /predict`
 
@@ -99,28 +235,12 @@ Response:
 }
 ```
 
-You can test it with curl:
+Quick curl test:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/predict \
   -H "Content-Type: application/json" \
   -d '{"images": [[0.0, 0.0, ...]], "original_index": [0]}'
-```
-
-### Client scripts
-
-```bash
-# split the job into two chunks
-cd client && python3 split_job.py
-
-# process part 1 locally
-cd client && python3 run_worker_local.py
-
-# send part 2 to the server
-cd client && python3 send_to_server.py --url http://<server-ip>:8000/predict
-
-# combine and verify against the baseline
-cd client && python3 combine_and_verify.py
 ```
 
 ---
