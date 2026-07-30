@@ -19,14 +19,6 @@ worker2:
 split:
 	python3 split_job.py
 
-#Runs all three, in order, one after another
-baseline: prepare train baseline_run
-	@echo "Baseline pipeline complete."
-
-#Splits then runs both workers
-workers: split worker1 worker2
-	@echo "Split, workers ran, computers simulated."
-
 #Runs all
 all: baseline workers
 
