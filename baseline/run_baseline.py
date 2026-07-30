@@ -16,7 +16,7 @@ import numpy as np
 import joblib
 
 def main():
-    model = joblib.load("baseline_model.joblib")
+    model = joblib.load("../shared/baseline_model.joblib")
     data = np.load("job.npz")
     X_job, y_job = data["X"], data["y"]
 
