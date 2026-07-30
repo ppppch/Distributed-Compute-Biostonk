@@ -13,7 +13,7 @@ import joblib
 app = FastAPI()
 
 #loads the model once, when the server starts
-model = joblib.load("baseline_model.joblib")
+model = joblib.load("../shared/baseline_model.joblib")
 
 #defines the shape of data we expect to receive
 class PredictRequest(BaseModel):

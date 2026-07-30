@@ -27,7 +27,7 @@ def main():
     )
     model.fit(X_train, y_train) #training
 
-    joblib.dump(model, "baseline_model.joblib") #a trained model, able to recognize the learned patterns
+    joblib.dump(model, "../shared/baseline_model.joblib") #a trained model, able to recognize the learned patterns
     print("Model trained and saved to baseline_model.joblib")
 
 if __name__ == "__main__":
