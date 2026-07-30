@@ -27,7 +27,7 @@ def main():
     combined_hash = hashlib.sha256(combined_predictions.tobytes()).hexdigest()
 
     #load the baseline's report to compare against
-    with open("baseline_report.json") as f:
+    with open("../baseline/baseline_report.json") as f:
         baseline_report = json.load(f)
     baseline_hash = baseline_report["prediction_hash_sha256"]
 

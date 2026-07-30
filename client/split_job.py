@@ -10,7 +10,8 @@ in the correct order later when combining results.
 import numpy as np
 
 def main():
-    data = np.load("job.npz")
+    #the job data lives next to the baseline scripts
+    data = np.load("../baseline/job.npz")
     X_job, y_job = data["X"], data["y"]
 
     num_samples = X_job.shape[0]
