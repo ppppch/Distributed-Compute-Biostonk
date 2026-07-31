@@ -10,10 +10,13 @@ from pydantic import BaseModel
 import numpy as np
 import joblib
 
+from firebase_audit import FirestoreAudit
+
 app = FastAPI()
 
 #loads the model once, when the server starts
 model = joblib.load("../shared/baseline_model.joblib")
+audit = FirestoreAudit.from_environment()
 
 #defines the shape of data we expect to receive
 class PredictRequest(BaseModel):
@@ -27,9 +30,13 @@ def read_root():
 @app.post("/predict")
 def predict(request: PredictRequest):
     X = np.array(request.images)              #convert the incoming list back into a numpy array
+    job_id = audit.record_started(len(X)) if audit else None
     predictions = model.predict(X)             #run inference
+    if audit and job_id:
+        audit.record_completed(job_id)
 
     return {
         "predictions": predictions.tolist(),   #numpy arrays aren't JSON-friendly, convert to a plain list
-        "original_index": request.original_index
+        "original_index": request.original_index,
+        "job_id": job_id,
     }

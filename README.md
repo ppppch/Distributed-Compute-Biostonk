@@ -20,10 +20,33 @@ pip install requests numpy scikit-learn joblib
 The server only needs:
 
 ```bash
-pip install fastapi uvicorn scikit-learn numpy joblib
+pip install fastapi uvicorn scikit-learn numpy joblib firebase-admin
 ```
 
 (or run `pip install -r server/requirements.txt` from the server folder).
+
+### Firebase audit (optional)
+
+The server can write a small audit record for each inference request to the
+Firestore project `civicgrid-e8b69`. The prediction path never reads Firestore:
+each request writes one `inference_jobs` document at start and updates it at
+completion. Images and predictions are not stored in Firestore.
+
+Create a Firestore database in the CivicGrid Firebase console, then authenticate
+the server with Application Default Credentials or a service-account key kept
+outside this repository. Enable the audit when starting the server:
+
+```bash
+export FIRESTORE_AUDIT_ENABLED=true
+export FIREBASE_PROJECT_ID=civicgrid-e8b69
+export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+This design uses **0 Firestore reads per inference job**. Avoid listeners,
+collection queries, and polling the job document; use the synchronous `/predict`
+response instead. At 50,000 inference jobs, it remains at 0 reads and uses
+100,000 Firestore writes.
 
 ---
 
