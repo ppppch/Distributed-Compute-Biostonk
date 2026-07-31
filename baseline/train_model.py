@@ -10,8 +10,10 @@ Creates baseline_model.joblib which is the model, or the result
 containing specific learned patterns.
 """
 
-import numpy as np
+from pathlib import Path
+
 import joblib
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier #imports the algorithm
 
 RANDOM_SEED = 42
@@ -27,7 +29,9 @@ def main():
     )
     model.fit(X_train, y_train) #training
 
-    joblib.dump(model, "../shared/baseline_model.joblib") #a trained model, able to recognize the learned patterns
+    model_path = Path("../shared/baseline_model.joblib")
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, model_path) #a trained model, able to recognize the learned patterns
     print("Model trained and saved to baseline_model.joblib")
 
 if __name__ == "__main__":
