@@ -7,6 +7,8 @@ This project runs handwritten-digit inference across **two real machines**:
 
 The old two-file simulation in `simulation/` is no longer used; it’s just kept for reference.
 
+Clinical-trial embedding data can be imported through [clinical/README.md](clinical/README.md).
+
 ---
 
 ## What you need first

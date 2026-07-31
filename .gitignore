@@ -6,3 +6,4 @@ service-account*.json
 *.joblib
 *.npz
 baseline_report.json
+clinical/data/
