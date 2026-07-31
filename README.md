@@ -1,191 +1,272 @@
-# How to Run
+# Distributed MNIST Digit Inference
+
+This project runs handwritten-digit inference across **two real machines**:
+
+- **Server computer** — hosts the trained model and answers prediction requests over HTTP.
+- **Client computer** — splits the job, processes half locally, sends the other half to the server, and verifies the combined result.
+
+The old two-file simulation in `simulation/` is no longer used; it’s just kept for reference.
+
+---
+
+## What you need first
+
+Install these on whichever computer runs the baseline and the client:
+
+```bash
+pip install requests numpy scikit-learn joblib
 ```
+
+The server only needs:
+
+```bash
+pip install fastapi uvicorn scikit-learn numpy joblib
+```
+
+(or run `pip install -r server/requirements.txt` from the server folder).
+
+---
+
+## Step 0: Build the baseline
+
+On **one** computer (it can be the client, the server, or a third machine), run:
+
+```bash
 make baseline
 ```
-Runs the single-computer phase, in order: `prepare_dataset.py` → `train_model.py` → `run_baseline.py`. Produces the baseline answer key (`baseline_report.json`), including the fingerprint hash.
+
+You should see output like this:
 
 ```
-make workers
+Train set: 1257 samples -> train.npz
+Job set:   540 samples -> job.npz
+Model trained and saved to baseline_model.joblib
+Processed 540 samples in ...
+Accuracy: 0.9667
+Fingerprint (hash): a4b7968caf3ccc0f397d81d2ed7e4acbedf7fec14c86596e4a116b1172ceadd4
+Baseline pipeline complete. Model saved to shared/baseline_model.joblib
 ```
-Runs the distributed (simulated) phase, in order: `split_job.py` → `run_worker.py` (twice, once per chunk). Splits the job into two chunks and processes each one independently, as if on two separate computers.
+
+This creates three things you need for the distributed run:
+
+- `shared/baseline_model.joblib` — the trained model
+- `baseline/job.npz` — the 540 images that will be split across machines
+- `baseline/baseline_report.json` — the answer key/hash
+
+---
+
+## Quick test: one computer, two terminals
+
+You can test the whole two-machine flow on a single computer using two terminal windows.
+
+### Terminal 1 — start the server
+
+```bash
+cd server
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+You should see:
 
 ```
-make clean
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000
 ```
-Deletes every generated file (`.npz`, `.joblib`, `.json`).
 
-```
-make test
-```
-Runs the unit and integration tests in `tests/`.
+Leave this running.
 
-You can also run any single step on its own:
+### Terminal 2 — run the client
 
-```
-make prepare
-make train
-make baseline_run
+From the project root:
+
+```bash
 make split
-make worker1
-make worker2
-make test
-```
-
-**Typical full run, start to finish:**
-```
-make baseline
-make workers
+make worker_local
+cd client
+python3 send_to_server.py --url http://127.0.0.1:8000/predict
 python3 combine_and_verify.py
 ```
 
-
-# How the Data Moves
-### Stage 1: Raw data exists
-
-**1,797 handwritten digit images**, each one already labeled with its correct answer (a real person confirmed "this is a 3," etc.)
-
-↓
-
-### Stage 2: Split into two piles (`prepare_dataset.py`)
+Expected final output:
 
 ```
-1,797 images
-      │
-      ├──► 1,257 images → train.npz  (for teaching the model)
-      │
-      └──►   540 images → job.npz    (for testing/running the model)
+Sent 270 samples to http://127.0.0.1:8000/predict (Part 2)
+Baseline hash:    a4b7968caf3ccc0f397d81d2ed7e4acbedf7fec14c86596e4a116b1172ceadd4
+Distributed hash: a4b7968caf3ccc0f397d81d2ed7e4acbedf7fec14c86596e4a116b1172ceadd4
+MATCH - distributed results are identical to the baseline.
 ```
 
-At this point, nothing has been "learned" yet — this is purely organizing raw data.
+The hash on your machine may be different, but the important part is `MATCH`.
 
-↓
-
-### Stage 3: Choose an algorithm (`train_model.py`, import line)
-
-```python
-from sklearn.ensemble import RandomForestClassifier
-```
-
-This brings in the **method** for learning. It's an empty, reusable process. It knows nothing about digits yet.
-
-↓
-
-### Stage 4: Training — algorithm + data → model
-
-```python
-model = RandomForestClassifier(...)      # empty structure, using the algorithm
-model.fit(X_train, y_train)              # THE ACTUAL LEARNING HAPPENS HERE
-```
-
-This is the one moment where **data** and **algorithm** combine:
-
-- **Input:** 1,257 images (`X_train`) + their correct answers (`y_train`)
-- **Process:** the algorithm looks for patterns that connect pixel arrangements to digits
-- **Output:** a **trained model** — no longer empty, now full of learned patterns
-
-```python
-joblib.dump(model, "baseline_model.joblib")
-```
-
-That model gets saved to a file. From this point forward, this file **is** the model. It is reusable, and never retrained again in this project.
-
-↓
-
-### Stage 5: Inference — model + new data → predictions (`run_baseline.py`)
-
-```python
-model = joblib.load("baseline_model.joblib")   # load the frozen, trained model
-data = np.load("job.npz")
-X_job, y_job = data["X"], data["y"]
-predictions = model.predict(X_job)              # INFERENCE HAPPENS HERE
-```
-
-- **Input:** the trained model + 540 *new* images (`X_job`) — notice, no answers given this time
-- **Process:** the model applies the patterns it already learned, and guesses each digit
-- **Output:** 540 predictions
-
-↓
-
-### Stage 6: Verification — checking the guesses (baseline)
-
-```python
-accuracy = (predictions == y_job).mean()          # compare guesses to real answers
-pred_hash = hashlib.sha256(predictions.tobytes())  # fingerprint the guesses
-```
-
-This is the only place `y_job` (the real answers for the job data) actually gets used — to grade the model afterwards. The resulting hash becomes the **answer key** for the distributed phase below.
-
-↓
-
-### Stage 7: Split the job into two chunks (`split_job.py`)
-
-```
-job.npz (540 images)
-      │
-      ├──► 270 images → job_part1.npz  (simulated Computer 1)
-      │
-      └──► 270 images → job_part2.npz  (simulated Computer 2)
-```
-
-Each chunk also stores its `original_index` — the position each image held in the original 540 — so the results can be put back in the correct order later.
-
-↓
-
-### Stage 8: Distributed inference — same model, two chunks (`run_worker.py`)
-
-```python
-# run_worker.py is invoked once per chunk with different input/output paths.
-model = joblib.load("baseline_model.joblib")   # the SAME frozen model, no retraining
-data = np.load("job_part1.npz")                # only this chunk -- no knowledge of the other
-predictions = model.predict(data["X"])          # INFERENCE, run independently per chunk
-```
-
-- Each worker script only ever sees its own chunk — this simulates two separate computers that can't see each other's data
-- Both use the exact same `baseline_model.joblib` file, so there's nothing different about *how* they predict — only *which slice* of data they're predicting on
-- Each saves its own predictions **plus** `original_index`, so order can be restored later
-
-↓
-
-### Stage 9: Combine + verify (`combine_and_verify.py`)
-
-```python
-combined_predictions = all_predictions[sort_order]                       # reorder using original_index
-combined_hash = hashlib.sha256(combined_predictions.tobytes()).hexdigest()
-```
-
-- Both chunks' predictions are stitched back together, sorted by `original_index` so they're in the exact same order as the original baseline run
-- The fingerprint is recomputed the same way it was in Stage 6
-- If `combined_hash == baseline_hash` → the distributed pipeline produced results **identical** to the single-computer baseline
+To stop the server, go back to Terminal 1 and press `Ctrl + C`.
 
 ---
 
-## Putting it all on one line
+## Real test: two separate computers
 
-```
-Raw labeled images
-   → split into TRAIN data + JOB data
-       → TRAIN data + algorithm → (training) → trained MODEL
-           → trained MODEL + JOB data → (inference) → predictions
-               → predictions vs real answers → accuracy + fingerprint (baseline)
+### Computer A — the server
 
-JOB data → split into PART 1 + PART 2
-   → trained MODEL + PART 1 → predictions 1  ─┐
-   → trained MODEL + PART 2 → predictions 2  ─┴─► combine (in order) → fingerprint
-                                                        → compare to baseline fingerprint
-```
+1. Copy these to the server computer, keeping the same folder layout:
 
-## The key mental model to walk away with
+   ```
+   server/
+   shared/baseline_model.joblib
+   ```
 
-| Term | What it is | When it's used |
-|---|---|---|
-| **Dataset** | Raw labeled examples | Exists before anything runs |
-| **Algorithm** | The general learning method | Imported, empty, reusable |
-| **Training** | Algorithm + labeled data → patterns | Happens once (`fit()`) |
-| **Model** | The saved, specific result of training | Created once, reused forever after |
-| **Inference** | Model + new unlabeled data → predictions | Happens every time you `predict()` — this is what you're distributing |
-| **Verification** | Predictions vs. real answers | Happens after inference, to check correctness |
-| **Chunk / part** | A slice of the job data | Created in Stage 7, one per simulated computer |
-| **Worker** | A script that runs inference on one chunk only | Simulates one computer's independent piece of work |
-| **Combine + verify** | Reassembling chunks in order and re-checking the fingerprint | Proves the distributed result matches the single-computer baseline |
+   So the server folder looks like:
+
+   ```
+   server/
+     server.py
+     requirements.txt
+   shared/
+     baseline_model.joblib
+   ```
+
+2. Install server dependencies:
+
+   ```bash
+   cd server
+   pip install -r requirements.txt
+   ```
+
+3. Start the server:
+
+   ```bash
+   uvicorn server:app --host 0.0.0.0 --port 8000
+   ```
+
+   Note the server’s IP address (for example, `192.168.1.50`).
+
+### Computer B — the client
+
+1. Copy these to the client computer, keeping the same folder layout:
+
+   ```
+   client/
+   baseline/
+   shared/baseline_model.joblib
+   Makefile
+   ```
+
+   So the client folder looks like:
+
+   ```
+   client/
+     split_job.py
+     run_worker_local.py
+     send_to_server.py
+     combine_and_verify.py
+   baseline/
+     job.npz
+     baseline_report.json
+   shared/
+     baseline_model.joblib
+   Makefile
+   ```
+
+2. Install client dependencies:
+
+   ```bash
+   pip install requests numpy scikit-learn joblib
+   ```
+
+3. Run the client pipeline. Replace `<server-ip>` with the server’s actual IP:
+
+   ```bash
+   make split
+   make worker_local
+   cd client
+   python3 send_to_server.py --url http://<server-ip>:8000/predict
+   python3 combine_and_verify.py
+   ```
+
+   Example:
+
+   ```bash
+   python3 send_to_server.py --url http://192.168.1.50:8000/predict
+   ```
+
+4. You should see:
+
+   ```
+   Sent 270 samples to http://192.168.1.50:8000/predict (Part 2)
+   Baseline hash:    ...
+   Distributed hash: ...
+   MATCH - distributed results are identical to the baseline.
+   ```
 
 ---
+
+## What each file does
+
+| File | Purpose |
+|---|---|
+| `baseline/prepare_dataset.py` | Splits raw digits into `train.npz` and `job.npz` |
+| `baseline/train_model.py` | Trains the model and saves it to `shared/baseline_model.joblib` |
+| `baseline/run_baseline.py` | Runs inference on the full job and creates `baseline_report.json` (the answer key) |
+| `server/server.py` | FastAPI server that loads the model and exposes `POST /predict` |
+| `client/split_job.py` | Splits `job.npz` into `job_part1.npz` and `job_part2.npz` |
+| `client/run_worker_local.py` | Processes `job_part1.npz` locally, saves `results_part1.npz` |
+| `client/send_to_server.py` | Sends `job_part2.npz` to the server, saves `results_part2.npz` |
+| `client/combine_and_verify.py` | Combines both result files and checks the fingerprint |
+
+---
+
+## Using the server API directly
+
+`POST /predict`
+
+Request body:
+
+```json
+{
+  "images": [[0.0, 1.0, ...], ...],
+  "original_index": [0, 1, ...]
+}
+```
+
+Response:
+
+```json
+{
+  "predictions": [3, 7, ...],
+  "original_index": [0, 1, ...]
+}
+```
+
+Quick curl test:
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"images": [[0.0, 0.0, ...]], "original_index": [0]}'
+```
+
+---
+
+## Makefile targets
+
+```bash
+make baseline      # full single-computer baseline
+make prepare       # split raw data
+make train         # train and save the model
+make baseline_run  # run single-computer inference
+make split         # split job.npz into two chunks
+make worker_local  # run the local client worker (Part 1)
+make test          # run Maggie's unit and integration tests
+make clean         # delete all generated files
+```
+
+---
+
+## About `simulation/`
+
+`simulation/run_worker1.py` and `simulation/run_worker2.py` are the old
+single-computer simulation. They pretended to be two separate machines by
+reading two different `.npz` files in the same filesystem. The project now uses
+the real server/client code in `server/` and `client/`.
+
+The original root-level scripts and Maggie's tests are also retained for
+compatibility. Run `make legacy-baseline`, then `make legacy-workers` to use the
+local simulation path.
