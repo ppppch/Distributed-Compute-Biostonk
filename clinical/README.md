@@ -41,6 +41,19 @@ Emde corpus does not contain structured endpoint, phase, population, or
 jurisdiction metadata, so those fields are validated for future evidence sources
 but cannot yet be used as retrieval filters.
 
+## Trial Metadata Catalog
+
+`import_metadata.py` converts an approved ClinicalTrials.gov API v2 JSON export
+into an NCT-keyed local metadata catalog. The generated `trial_metadata.json`
+stays ignored because it is a refreshed data artifact.
+
+```bash
+venv/bin/python clinical/import_metadata.py path/to/clinicaltrials-studies.json
+```
+
+The importer preserves null or empty values when source fields are absent and
+adds a source URL, retrieval timestamp, and content hash to every record.
+
 Run the API after generating `trials.npz`:
 
 ```bash

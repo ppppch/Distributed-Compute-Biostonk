@@ -1,5 +1,41 @@
 # BioStonk Product Requirements
 
+## Read This First
+
+This document is the working guide for BioStonk interns. Start with **Current
+State** and **Next Assigned Deliverable** before changing code.
+
+BioStonk is not yet a clinical decision-support product. The repository has a
+working clinical-trial embedding retrieval prototype and a separate distributed
+MNIST demonstration. Do not describe embedding similarity as regulatory
+comparability, and do not present generated output as clinical or regulatory
+advice.
+
+### Current State
+
+| Capability | Status | Location |
+|---|---|---|
+| Imported clinical embeddings | Complete | `clinical/data/Emde/` |
+| Local trial similarity search | Complete | `clinical/trial_search.py` |
+| Evidence-source hash and provenance | Complete | `clinical/evidence_catalog.py` |
+| Program-profile schema and input fingerprint | Complete | `clinical/schemas.py` |
+| Clinical evidence API | Complete | `clinical/api.py` |
+| Structured trial metadata | Not started | Required before metadata filters |
+| Source-linked regulatory claims | Not started | Phase 2 |
+| Web app, authentication, tenant isolation | Not started | Phase 3 |
+| Distributed clinical task execution | Not started | Phase 4 |
+
+### Run Locally
+
+```bash
+venv/bin/python -m pip install -r clinical/requirements.txt
+venv/bin/python clinical/import_trials.py clinical/data/Emde
+venv/bin/python -m unittest discover -s tests -v
+venv/bin/uvicorn clinical.api:app --reload
+```
+
+The clinical API is local and does not use Firebase.
+
 ## Product Vision
 
 BioStonk is an enterprise clinical AI platform that turns fragmented clinical
@@ -64,7 +100,7 @@ An auditable decision-support brief containing:
 - A reproducible analysis record showing inputs, model/version, task results,
   and verification status.
 
-## MVP Requirements
+## Product Requirements
 
 ### Evidence Ingestion
 
@@ -109,6 +145,67 @@ An auditable decision-support brief containing:
 - Do not use protected health information in the MVP without a defined privacy,
   security, and contractual review.
 
+## Next Assigned Deliverable
+
+### Clinical-Trial Metadata Catalog
+
+The immediate blocker is missing structured metadata. The Emde files provide
+only `nct_id`, 128 embedding values, source workbook, and a binary sentiment
+label. They do **not** provide disease, endpoint, phase, population, comparator,
+or jurisdiction. Do not build filters for fields that are not in an approved
+source.
+
+Build a local metadata catalog keyed by `nct_id` using an approved clinical-trial
+source or a provided export. The catalog must support these fields when available:
+
+- Official title and brief summary
+- Conditions and disease subtype
+- Study phase and study type
+- Intervention, comparator, and arm description
+- Primary and secondary outcomes
+- Eligibility/population information
+- Sponsor, status, dates, and jurisdictions/locations
+- Original source URL, retrieval timestamp, license or use status, and content
+  hash
+
+#### Definition of Done
+
+- A reproducible importer produces a local, ignored metadata artifact.
+- Every metadata record has an `nct_id`, `source_id`, source URL, retrieval time,
+  and SHA-256 content hash.
+- Missing fields remain `null` or empty; do not infer clinical facts.
+- The API can filter results by at least condition, phase, and study type when
+  those fields are present.
+- Tests cover import validation, an NCT ID with metadata, an NCT ID without
+  metadata, and each supported filter.
+- Documentation identifies the source, refresh procedure, and any license or
+  use restrictions.
+
+## Engineering Rules
+
+- Keep raw approved source files and generated artifacts separate. Commit only
+  source files that the project is allowed to distribute.
+- Preserve source provenance and content hashes. Never replace a source record
+  silently.
+- Every new endpoint needs a focused test and must keep the full test suite
+  passing.
+- Never commit credentials, API keys, service-account files, PHI, or customer
+  documents.
+- Do not add generative claim production until claim-level source verification is
+  implemented.
+- Prefer local files and local computation during Phase 1.
+
+### Firebase Rules
+
+Firebase is not needed for the current clinical retrieval work. The existing
+Firestore audit is optional and write-only when enabled. Keep it free of
+collection queries, listeners, polling, and document reads.
+
+Before enabling or adding Firebase-backed functionality, notify the project lead
+to check Firebase usage. The intended budget is below 50,000 Firestore reads per
+day. Any proposed Firebase feature must document its expected reads per user
+action and per day before implementation.
+
 ## Distributed Compute Requirements
 
 Distributed compute is an implementation mechanism, not the primary customer
@@ -128,41 +225,14 @@ hardware while preserving verification and auditability.
   processing, combining, and verifying work, but it does not yet satisfy these
   clinical or enterprise requirements.
 
-## Current Repository Gap
-
-The repository currently provides a distributed inference prototype, FastAPI
-server/client communication, a Firestore metadata audit option, and a clinical
-embedding importer. It does not yet provide the BioStonk product workflow.
-
-Required implementation work:
-
-1. Replace the MNIST-specific model and request schema with clinical evidence
-   task schemas.
-2. Build an evidence catalog with provenance, document storage, metadata, and
-   searchable embeddings.
-3. Add a clinical-trial similarity and filtering service using the imported
-   `nct_id` embedding data.
-4. Build a task coordinator, worker registration, retry policy, and verifier for
-   source-linked analysis tasks.
-5. Add a web application for program setup, evidence review, claim-level
-   citations, brief review, and export.
-6. Add authentication, tenant isolation, role-based access control, and security
-   logging before accepting customer documents.
-7. Replace the current optional Firestore job audit with a production audit
-   design that records analysis lineage without storing sensitive document
-   content unnecessarily.
-8. Add evaluation datasets and human-review criteria for comparability,
-   citation accuracy, and regulatory usefulness.
-
 ## Delivery Plan
 
 ### Phase 1: Evidence Foundation
 
-- Define the canonical program-profile, evidence-source, analysis-task, claim,
-  and brief schemas.
-- Import and validate clinical-trial embeddings from `clinical/data/Emde/`.
-- Build trial filtering and similarity retrieval with test fixtures.
-- Establish provenance and content-hash storage for every source.
+- Complete the clinical-trial metadata catalog described above.
+- Extend retrieval with approved structured metadata filters.
+- Define analysis-task, claim, and brief schemas after the metadata contract is
+  stable.
 
 ### Phase 2: Auditable Analysis
 
