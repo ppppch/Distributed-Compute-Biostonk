@@ -25,6 +25,13 @@ their sentiment label and source workbook. This is the initial evidence-retrieva
 component; it does not yet claim clinical comparability beyond embedding
 similarity.
 
+Each returned trial includes a local evidence-source record: a stable source ID,
+source type, source location, SHA-256 content hash, and source-file modified
+timestamp.
+The supplied workbooks do not include public source URLs or licensing metadata,
+so those fields must be added from an approved evidence registry before making
+external regulatory claims.
+
 Run the API after generating `trials.npz`:
 
 ```bash

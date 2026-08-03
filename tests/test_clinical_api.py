@@ -15,6 +15,10 @@ class TestClinicalApi(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
         dataset_path = Path(self.temporary_directory.name) / "trials.npz"
+        source_directory = Path(self.temporary_directory.name) / "sources"
+        source_directory.mkdir()
+        (source_directory / "a.xlsx").write_bytes(b"source-a")
+        (source_directory / "b.xlsx").write_bytes(b"source-b")
         np.savez_compressed(
             dataset_path,
             nct_id=np.array(["NCT001", "NCT002"]),
@@ -23,7 +27,7 @@ class TestClinicalApi(unittest.TestCase):
             label_names=np.array(["0.0", "1.0"]),
             source_workbook=np.array(["a.xlsx", "b.xlsx"]),
         )
-        self.client = TestClient(create_app(dataset_path))
+        self.client = TestClient(create_app(dataset_path, source_directory))
 
     def test_returns_comparable_trials(self):
         response = self.client.get("/trials/NCT001/comparables?limit=1")
@@ -31,6 +35,8 @@ class TestClinicalApi(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()[0]["nct_id"], "NCT002")
         self.assertEqual(response.json()[0]["source_workbook"], "b.xlsx")
+        self.assertEqual(response.json()[0]["source"]["source_location"], "clinical/data/Emde/b.xlsx")
+        self.assertTrue(response.json()[0]["source"]["content_hash_sha256"])
 
     def test_returns_not_found_for_unknown_trial(self):
         response = self.client.get("/trials/NCT404/comparables")

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
+from clinical.evidence_catalog import EvidenceSource
 from clinical.trial_search import TrialSearch
 
 
@@ -22,7 +23,13 @@ class TestTrialSearch(unittest.TestCase):
             label_names=np.array(["0.0", "1.0"]),
             source_workbook=np.array(["a.xlsx", "a.xlsx", "b.xlsx"]),
         )
-        self.search = TrialSearch(self.dataset_path)
+        self.search = TrialSearch(
+            self.dataset_path,
+            {
+                "a.xlsx": EvidenceSource("source-a", "test", "a.xlsx", "hash-a", "2026-01-01T00:00:00+00:00"),
+                "b.xlsx": EvidenceSource("source-b", "test", "b.xlsx", "hash-b", "2026-01-01T00:00:00+00:00"),
+            },
+        )
 
     def test_returns_closest_trial_with_provenance(self):
         results = self.search.find_comparables("NCT001", limit=1)
@@ -30,6 +37,7 @@ class TestTrialSearch(unittest.TestCase):
         self.assertEqual(results[0].nct_id, "NCT002")
         self.assertEqual(results[0].sentiment, "0.0")
         self.assertEqual(results[0].source_workbook, "a.xlsx")
+        self.assertEqual(results[0].source.source_id, "source-a")
         self.assertGreater(results[0].similarity, 0.9)
 
     def test_applies_source_and_sentiment_filters(self):

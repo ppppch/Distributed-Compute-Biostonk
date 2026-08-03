@@ -5,6 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
+from clinical.evidence_catalog import EvidenceSource
+
 
 @dataclass(frozen=True)
 class ComparableTrial:
@@ -14,12 +16,13 @@ class ComparableTrial:
     similarity: float
     sentiment: str
     source_workbook: str
+    source: EvidenceSource
 
 
 class TrialSearch:
     """Loads a validated trial dataset and returns cosine-similar records."""
 
-    def __init__(self, dataset_path: Path) -> None:
+    def __init__(self, dataset_path: Path, source_catalog: dict[str, EvidenceSource]) -> None:
         dataset = np.load(dataset_path)
         required_fields = {"nct_id", "X", "y", "label_names", "source_workbook"}
         missing_fields = required_fields - set(dataset.files)
@@ -32,6 +35,7 @@ class TrialSearch:
         self._sentiment_ids = dataset["y"].astype(np.int64)
         self._sentiment_names = dataset["label_names"].astype(str)
         self._sources = dataset["source_workbook"].astype(str)
+        self._source_catalog = source_catalog
         self._indices_by_nct_id: dict[str, list[int]] = {}
         for index, nct_id in enumerate(self._nct_ids):
             self._indices_by_nct_id.setdefault(nct_id, []).append(index)
@@ -76,6 +80,7 @@ class TrialSearch:
                     similarity=float(similarities[index]),
                     sentiment=label,
                     source_workbook=self._sources[index],
+                    source=self._source_catalog[self._sources[index]],
                 )
             )
             if len(candidates) == limit:
