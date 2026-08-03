@@ -32,6 +32,15 @@ The supplied workbooks do not include public source URLs or licensing metadata,
 so those fields must be added from an approved evidence registry before making
 external regulatory claims.
 
+## Program Profile Contract
+
+`POST /analysis-requests/validate` accepts the canonical program profile and
+evidence scope, then returns a deterministic input hash. This records the exact
+analysis input without performing retrieval or storing data remotely. The current
+Emde corpus does not contain structured endpoint, phase, population, or
+jurisdiction metadata, so those fields are validated for future evidence sources
+but cannot yet be used as retrieval filters.
+
 Run the API after generating `trials.npz`:
 
 ```bash

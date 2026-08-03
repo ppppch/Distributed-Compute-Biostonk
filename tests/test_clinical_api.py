@@ -42,3 +42,32 @@ class TestClinicalApi(unittest.TestCase):
         response = self.client.get("/trials/NCT404/comparables")
 
         self.assertEqual(response.status_code, 404)
+
+    def test_validates_and_fingerprints_program_profile(self):
+        request = {
+            "profile": {
+                "indication": "Rare disease",
+                "endpoints": ["Functional outcome"],
+                "trial_phase": "Phase 2",
+            },
+            "anchor_nct_id": "NCT001",
+            "evidence_scope": {"source_workbooks": ["a.xlsx"]},
+        }
+
+        first_response = self.client.post("/analysis-requests/validate", json=request)
+        second_response = self.client.post("/analysis-requests/validate", json=request)
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(first_response.json()["indication"], "Rare disease")
+        self.assertEqual(
+            first_response.json()["input_hash_sha256"],
+            second_response.json()["input_hash_sha256"],
+        )
+
+    def test_rejects_profile_without_indication(self):
+        response = self.client.post(
+            "/analysis-requests/validate",
+            json={"profile": {}, "anchor_nct_id": "NCT001"},
+        )
+
+        self.assertEqual(response.status_code, 422)
