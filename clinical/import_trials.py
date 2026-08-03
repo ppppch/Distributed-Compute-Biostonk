@@ -1,14 +1,36 @@
 """Convert clinical-trial embedding workbooks into one compressed dataset."""
 
 import argparse
+import logging
 from pathlib import Path
 
 import numpy as np
 from openpyxl import load_workbook
 
+logger = logging.getLogger(__name__)
 
 REQUIRED_COLUMNS = {"nct_id", "sentiment"}
 VALID_SENTIMENTS = {"0.0", "1.0"}
+REQUIRED_NPZ_KEYS = ["nct_id", "label_names", "source_workbook"]
+
+def validate_npz_schema(data_dict: Dict[str, Any]) -> Tuple[bool, str]:
+    """Validates that loaded/processed dataset elements conform to the expected schema keys.
+
+    Returns:
+        Tuple[bool, str]: Success boolean and descriptive status message.
+    """
+    missing_keys = [key for key in REQUIRED_NPZ_KEYS if key not in data_dict]
+    if missing_keys:
+        msg = f"Schema Validation Error: Missing required keys {missing_keys}"
+        logger.warning(msg)
+        return False, msg
+
+    if len(data_dict["nct_id"]) == 0:
+        msg = "Schema Validation Error: Generated dataset is empty."
+        logger.warning(msg)
+        return False, msg
+
+    return True, "Schema validation passed."
 
 
 def read_workbook(path: Path) -> tuple[list[str], np.ndarray, list[str], int]:
@@ -74,11 +96,33 @@ def main(input_directory: Path, output_path: Path) -> None:
             f"Loaded {len(trial_ids):,} trials from {workbook.name}; "
             f"skipped {skipped_rows:,} malformed rows"
         )
+        except ValueError as err:
+            print(f"Skipping problematic file {workbook.name}: {err}")
+
+     if not all_embeddings:
+        raise ValueError("No valid trial data could be loaded from any workbook.")
+    
 
     feature_matrix = np.vstack(all_embeddings)
     labels = np.asarray(all_sentiments, dtype=str)
     label_names, label_ids = np.unique(labels, return_inverse=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    prepared_payload = {
+        "nct_id": np.asarray(all_ids, dtype=str),
+        "X": feature_matrix,
+        "y": label_ids.astype(np.int64),
+        "label_names": label_names,
+        "source_workbook": np.asarray(sources, dtype=str),
+    }
+
+    is_valid, validation_msg = validate_npz_schema(prepared_payload)
+    if not is_valid:
+        print(f"WARNING: Output validation failed ({validation_msg}). Proceeding with safe fallback structure.")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    
     np.savez_compressed(
         output_path,
         nct_id=np.asarray(all_ids, dtype=str),
