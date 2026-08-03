@@ -2,10 +2,12 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 import numpy as np
 
 from clinical.evidence_catalog import EvidenceSource
+from clinical.metadata_catalog import TrialMetadataCatalog
 
 
 @dataclass(frozen=True)
@@ -17,12 +19,18 @@ class ComparableTrial:
     sentiment: str
     source_workbook: str
     source: EvidenceSource
+    metadata: dict | None
 
 
 class TrialSearch:
     """Loads a validated trial dataset and returns cosine-similar records."""
 
-    def __init__(self, dataset_path: Path, source_catalog: dict[str, EvidenceSource]) -> None:
+    def __init__(
+        self,
+        dataset_path: Path,
+        source_catalog: dict[str, EvidenceSource],
+        metadata_catalog: TrialMetadataCatalog | None = None,
+    ) -> None:
         dataset = np.load(dataset_path)
         required_fields = {"nct_id", "X", "y", "label_names", "source_workbook"}
         missing_fields = required_fields - set(dataset.files)
@@ -36,9 +44,14 @@ class TrialSearch:
         self._sentiment_names = dataset["label_names"].astype(str)
         self._sources = dataset["source_workbook"].astype(str)
         self._source_catalog = source_catalog
+        self._metadata_catalog = metadata_catalog
         self._indices_by_nct_id: dict[str, list[int]] = {}
         for index, nct_id in enumerate(self._nct_ids):
             self._indices_by_nct_id.setdefault(nct_id, []).append(index)
+
+    def metadata_for(self, nct_id: str) -> dict | None:
+        """Return imported structured metadata for a known Trial2Vec identifier."""
+        return self._metadata_catalog.get(nct_id) if self._metadata_catalog else None
 
     def find_comparables(
         self,
@@ -46,6 +59,9 @@ class TrialSearch:
         limit: int = 10,
         source_workbook: str | None = None,
         sentiment: str | None = None,
+        condition: str | None = None,
+        phase: str | None = None,
+        study_type: str | None = None,
     ) -> list[ComparableTrial]:
         """Return records closest to the first matching NCT embedding."""
         if limit < 1:
@@ -70,9 +86,16 @@ class TrialSearch:
             if index == query_index:
                 continue
             label = self._sentiment_names[self._sentiment_ids[index]]
+            metadata = self._metadata_catalog.get(self._nct_ids[index]) if self._metadata_catalog else None
             if source_workbook and self._sources[index] != source_workbook:
                 continue
             if sentiment and label != sentiment:
+                continue
+            if condition and not metadata_matches(metadata, "conditions", condition):
+                continue
+            if phase and not metadata_matches(metadata, "phases", phase):
+                continue
+            if study_type and not text_matches(metadata.get("study_type") if metadata else None, study_type):
                 continue
             candidates.append(
                 ComparableTrial(
@@ -81,8 +104,21 @@ class TrialSearch:
                     sentiment=label,
                     source_workbook=self._sources[index],
                     source=self._source_catalog[self._sources[index]],
+                    metadata=metadata,
                 )
             )
             if len(candidates) == limit:
                 break
         return candidates
+
+
+def text_matches(value: str | None, expected: str) -> bool:
+    return bool(value) and normalize(value) == normalize(expected)
+
+
+def metadata_matches(metadata: dict | None, field: str, expected: str) -> bool:
+    return bool(metadata) and any(text_matches(value, expected) for value in metadata.get(field, []))
+
+
+def normalize(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", value.casefold())

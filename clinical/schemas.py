@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -25,6 +26,9 @@ class EvidenceScope(BaseModel):
 
     source_workbooks: list[str] = Field(default_factory=list)
     sentiment: str | None = None
+    condition: str | None = None
+    phase: str | None = None
+    study_type: str | None = None
 
 
 class ComparableProgramRequest(BaseModel):
@@ -38,3 +42,93 @@ class ComparableProgramRequest(BaseModel):
     def input_hash(self) -> str:
         payload = json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+class ClaimReference(BaseModel):
+    """A verbatim excerpt from one retrieved metadata record."""
+
+    nct_id: str = Field(min_length=1)
+    source_id: str = Field(min_length=1)
+    content_hash_sha256: str = Field(min_length=1)
+    field_path: str = Field(pattern=r"^/")
+    excerpt: str = Field(min_length=1)
+
+
+class ClaimVerificationRequest(BaseModel):
+    """A user-supplied claim and the evidence scope used to verify its source."""
+
+    analysis_request: ComparableProgramRequest
+    claim_id: str = Field(min_length=1)
+    claim_text: str = Field(min_length=1)
+    claim_type: str = Field(min_length=1)
+    reference: ClaimReference
+
+
+class ReviewableClaim(BaseModel):
+    """A claim that must be source-verified before human review."""
+
+    claim_id: str = Field(min_length=1)
+    claim_text: str = Field(min_length=1)
+    claim_type: str = Field(min_length=1)
+    reference: ClaimReference
+
+
+class ReviewableBriefRequest(BaseModel):
+    analysis_request: ComparableProgramRequest
+    claims: list[ReviewableClaim] = Field(min_length=1)
+
+
+class ClaimReviewRequest(BaseModel):
+    reviewer_id: str = Field(min_length=1)
+    decision: Literal["approved", "rejected"]
+    note: str | None = None
+
+
+class ClaimEvaluationReview(BaseModel):
+    """A qualified reviewer's assessment for one evaluation example."""
+
+    reviewer_id: str = Field(min_length=1)
+    reviewed_at: str = Field(min_length=1)
+    source_support: Literal["supported", "unsupported", "uncertain"]
+    applicability: Literal["applicable", "not_applicable", "uncertain"]
+
+
+class ClaimEvaluationExample(BaseModel):
+    verification_request: ClaimVerificationRequest
+    expected_verification_status: Literal["source_verified", "rejected"]
+    review: ClaimEvaluationReview
+
+
+class ProtocolDraft(BaseModel):
+    """A local protocol version supplied by a live editing client."""
+
+    protocol_text: str = Field(min_length=1)
+    title: str | None = None
+    indication: str | None = None
+    study_phase: str | None = None
+    population: str | None = None
+    intervention: str | None = None
+    intervention_type: str | None = None
+    comparator: str | None = None
+    primary_endpoint: str | None = None
+    planned_enrollment: int | None = Field(default=None, ge=1)
+    planned_site_count: int | None = Field(default=None, ge=1)
+
+
+class ProtocolDraftAnalysisRequest(BaseModel):
+    draft: ProtocolDraft
+    previous_draft: ProtocolDraft | None = None
+
+
+class PredictionCandidate(BaseModel):
+    """A protocol candidate paired with a selected Trial2Vec anchor trial."""
+
+    candidate_id: str = Field(min_length=1)
+    anchor_nct_id: str = Field(min_length=1)
+    draft: ProtocolDraft
+
+
+class ClinicalPredictionJobRequest(BaseModel):
+    """A bounded simulated inference job for one or two protocol candidates."""
+
+    candidates: list[PredictionCandidate] = Field(min_length=1, max_length=2)

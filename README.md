@@ -1,4 +1,142 @@
-# Distributed MNIST Digit Inference
+# BioStonk Clinical Compute
+
+BioStonk is a local demonstration of a distributed clinical AI compute platform
+for CROs and pharmaceutical teams. A user can paste or upload a clinical-trial
+protocol, select a historical Trial2Vec anchor, submit one or two protocol
+candidates, watch a simulated distributed inference lifecycle, and inspect an
+experimental score with comparable historical trials.
+
+The browser workspace is served by FastAPI at `http://127.0.0.1:8001`.
+
+## Demo Workflow
+
+1. Paste a protocol or upload a `.txt`/`.md` draft.
+2. Complete the structured design and operational fields.
+3. Select a known NCT ID whose Trial2Vec embedding is in the local dataset.
+4. Optionally add a second candidate for comparison.
+5. Submit the job and watch it move through:
+
+  ```text
+  submitted -> sharded -> distributed -> running -> verified -> aggregated -> completed
+  ```
+
+6. Review the experimental estimate, factor values, risk indicators, five real
+  Trial2Vec nearest neighbors, mock devices, task assignments, and job history.
+
+## What Is Real and What Is Simulated
+
+**Real in the demo:**
+
+- Trial2Vec clinical-trial embeddings from the tracked Emde workbooks.
+- Cosine-similarity ranking over the imported embeddings.
+- Imported ClinicalTrials.gov metadata when present.
+- Source identifiers, URLs, timestamps, and content hashes.
+- Protocol completeness checks and deterministic draft hashes.
+
+**Simulated for the demo:**
+
+- Device enrollment, hardware telemetry, sharding, and endpoint execution.
+- Task verification and aggregation lifecycle transitions.
+- The numeric experimental estimate and any compute-cost assumptions.
+
+The score is labeled **Experimental demo estimate (not a validated clinical
+prediction)**. It is a transparent heuristic combining Trial2Vec similarity with
+available status, phase, enrollment, intervention-type, and protocol-coverage
+signals. It is not a probability of success and must not be used as clinical,
+operational, regulatory, or investment advice.
+
+The current Emde labels are sentiment labels, not historical trial outcomes. A
+validated prediction model would require approved outcome labels, calibration,
+external validation, and qualified clinical review.
+
+## Quick Start
+
+From a clean clone on macOS or Linux:
+
+```bash
+git clone https://github.com/ppppch/Distributed-Compute-Biostonk.git
+cd Distributed-Compute-Biostonk
+python3 -m venv venv
+venv/bin/python -m pip install --upgrade pip
+venv/bin/python -m pip install -r clinical/requirements.txt
+```
+
+Generate the ignored local data artifacts:
+
+```bash
+venv/bin/python clinical/import_trials.py clinical/data/Emde
+venv/bin/python -m clinical.fetch_metadata --limit 25
+venv/bin/python -m clinical.import_metadata clinical/data/studies.json
+```
+
+The metadata refresh calls the official ClinicalTrials.gov API. Do this before
+the demo, not during a live presentation.
+
+Run the application:
+
+```bash
+venv/bin/python -m uvicorn clinical.api:app --host 127.0.0.1 --port 8001
+```
+
+Open [http://127.0.0.1:8001](http://127.0.0.1:8001). The API schema is available
+at [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs).
+
+## Test
+
+```bash
+venv/bin/python -m unittest discover -s tests -v
+```
+
+Generated datasets, metadata catalogs, review ledgers, and uploaded protocols
+must remain untracked. Never commit credentials, service-account files, PHI, or
+customer documents.
+
+## Main Components
+
+| Path | Purpose |
+|---|---|
+| `clinical/static/` | Protocol workspace, jobs, results, comparison, and devices UI |
+| `clinical/api.py` | FastAPI application and demo endpoints |
+| `clinical/trial_search.py` | Trial2Vec cosine-similarity retrieval |
+| `clinical/demo_jobs.py` | In-memory simulated job coordinator and experimental score |
+| `clinical/protocol_analysis.py` | Draft coverage, hashing, and change signals |
+| `clinical/import_trials.py` | Emde workbook to local compressed embedding dataset |
+| `clinical/fetch_metadata.py` | Bounded ClinicalTrials.gov v2 cohort fetch |
+| `clinical/import_metadata.py` | NCT-keyed metadata catalog with provenance |
+| `BIOSTONK_IMPLEMENTATION_GUIDE.md` | One-week sprint plan, boundaries, and acceptance criteria |
+
+Detailed clinical commands and API behavior are documented in
+[clinical/README.md](clinical/README.md).
+
+## Demo API
+
+| Method and path | Purpose |
+|---|---|
+| `POST /protocol-drafts/analyze` | Analyze draft coverage and changes without a validated prediction |
+| `POST /demo/prediction-jobs` | Submit one or two protocol candidates |
+| `POST /demo/prediction-jobs/{job_id}/advance` | Advance one simulated lifecycle stage |
+| `GET /demo/prediction-jobs/history` | List local submitted, active, and completed jobs |
+| `GET /demo/devices` | List approved mock devices and assigned tasks |
+| `GET /trials/{nct_id}/comparables` | Retrieve real Trial2Vec nearest neighbors |
+
+## Firebase
+
+Firebase is not used by the clinical demo. The legacy MNIST server includes an
+optional write-only Firestore audit integration. Do not enable or extend it
+without checking Firebase usage first. Its normal path performs zero Firestore
+reads.
+
+## Contributing This Week
+
+Read [BIOSTONK_IMPLEMENTATION_GUIDE.md](BIOSTONK_IMPLEMENTATION_GUIDE.md) before
+starting. Intern contributions are candidate implementations, not assigned
+roles. Keep patches small, state planned files, include focused tests or visual
+evidence, and preserve all experimental/simulation labels. The project lead may
+select, combine, modify, or reject submitted work.
+
+---
+
+## Legacy Distributed MNIST Digit Inference
 
 This project runs handwritten-digit inference across **two real machines**:
 

@@ -20,6 +20,16 @@ def first_value(module: dict[str, Any], key: str) -> str | None:
     return str(value) if value else None
 
 
+def first_integer(module: dict[str, Any], key: str) -> int | None:
+    value = module.get(key)
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def study_record(study: dict[str, Any], retrieved_at: str) -> dict[str, Any]:
     protocol = study.get("protocolSection", {})
     identification = protocol.get("identificationModule", {})
@@ -41,6 +51,7 @@ def study_record(study: dict[str, Any], retrieved_at: str) -> dict[str, Any]:
         "conditions": values(conditions, "conditions"),
         "phases": values(design, "phases"),
         "study_type": first_value(design, "studyType"),
+        "enrollment": first_integer(design.get("enrollmentInfo", {}), "count"),
         "interventions": [
             {
                 "name": first_value(intervention, "name"),

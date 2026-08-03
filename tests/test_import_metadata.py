@@ -26,7 +26,11 @@ class TestMetadataImport(unittest.TestCase):
                                     "nctId": "NCT001",
                                     "officialTitle": "Example study",
                                 },
-                                "designModule": {"phases": ["PHASE2"], "studyType": "INTERVENTIONAL"},
+                                "designModule": {
+                                    "phases": ["PHASE2"],
+                                    "studyType": "INTERVENTIONAL",
+                                    "enrollmentInfo": {"count": 80},
+                                },
                                 "conditionsModule": {"conditions": ["Rare disease"]},
                                 "armsInterventionsModule": {
                                     "interventions": [{"name": "Example drug", "type": "DRUG"}]
@@ -48,6 +52,7 @@ class TestMetadataImport(unittest.TestCase):
 
         self.assertEqual(count, 1)
         self.assertEqual(record["phases"], ["PHASE2"])
+        self.assertEqual(record["enrollment"], 80)
         self.assertEqual(record["primary_outcomes"], ["Functional outcome"])
         self.assertEqual(record["source_url"], "https://clinicaltrials.gov/study/NCT001")
         self.assertTrue(record["content_hash_sha256"])
@@ -61,5 +66,6 @@ class TestMetadataImport(unittest.TestCase):
         record = json.loads(self.output_path.read_text())["records"]["NCT002"]
 
         self.assertIsNone(record["official_title"])
+        self.assertIsNone(record["enrollment"])
         self.assertEqual(record["conditions"], [])
         self.assertEqual(record["primary_outcomes"], [])

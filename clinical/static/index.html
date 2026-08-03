@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BioStonk Clinical Compute</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">Bio<span>Stonk</span><small>Clinical Compute</small></div>
+        <nav aria-label="Workspace navigation">
+          <a class="nav-link active" href="#workspace">Protocol workspace</a>
+          <a class="nav-link" href="#jobs">Prediction jobs</a>
+          <a class="nav-link" href="#devices">Approved devices</a>
+        </nav>
+        <div class="sidebar-note">
+          <strong>Demo environment</strong>
+          <p>Trial2Vec retrieval is real. Scores and distributed execution are simulated.</p>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div><p class="eyebrow">CRO &amp; Pharma Operations</p><h1>Protocol prediction workspace</h1></div>
+          <div class="badge">Experimental demo estimates</div>
+        </header>
+
+        <section class="notice"><strong>Important:</strong> This workspace is a product demonstration. It does not provide validated clinical predictions, operational recommendations, or regulatory advice.</section>
+
+        <section id="workspace" class="workspace-grid">
+          <form id="protocol-form" class="editor-panel">
+            <div class="section-heading"><div><p class="eyebrow">Candidate A</p><h2>Protocol draft</h2></div><label class="file-control">Upload text<input id="protocol-file" type="file" accept=".txt,.md"></label></div>
+            <label>Protocol text<textarea id="protocol-text" required>Phase 2 protocol evaluating an investigational therapy in adults with a rare disease.</textarea></label>
+            <div class="fields two-up">
+              <label>Trial2Vec anchor NCT<input id="anchor-nct" value="NCT02545127" required></label>
+              <label>Indication<input id="indication" value="Rare disease"></label>
+              <label>Phase<input id="study-phase" value="PHASE2"></label>
+              <label>Population<input id="population" value="Adults"></label>
+              <label>Intervention<input id="intervention" value="Investigational therapy"></label>
+              <label>Intervention type<select id="intervention-type"><option value="DRUG">Drug</option><option value="BIOLOGICAL">Biological</option><option value="DEVICE">Device</option><option value="">Not specified</option></select></label>
+              <label>Comparator<input id="comparator" value="Standard care"></label>
+              <label>Primary endpoint<input id="primary-endpoint" value="Functional outcome"></label>
+              <label>Planned enrollment<input id="planned-enrollment" type="number" min="1" value="80"></label>
+              <label>Planned sites<input id="planned-sites" type="number" min="1" value="4"></label>
+            </div>
+            <label class="toggle"><input id="compare-toggle" type="checkbox"> Compare with a second protocol candidate</label>
+            <section id="candidate-b" class="candidate-b hidden">
+              <p class="eyebrow">Candidate B</p>
+              <label>Protocol text<textarea id="protocol-text-b">Alternative protocol design for the same indication.</textarea></label>
+              <div class="fields two-up">
+                <label>Trial2Vec anchor NCT<input id="anchor-nct-b" value="NCT02545127"></label>
+                <label>Planned enrollment<input id="planned-enrollment-b" type="number" min="1" value="120"></label>
+              </div>
+            </section>
+            <button class="primary" type="submit">Submit prediction job</button>
+          </form>
+
+          <section class="signal-panel">
+            <div class="section-heading"><div><p class="eyebrow">Live draft analysis</p><h2>Coverage signals</h2></div><span id="analysis-state" class="status-dot">Ready</span></div>
+            <div id="coverage-output" class="coverage-output"><p>Edit the protocol to inspect draft coverage. Nothing is persisted by this demo.</p></div>
+            <div class="method-note"><strong>How Trial2Vec is used</strong><p>Select a known historical NCT as the embedding anchor. The job retrieves nearest Trial2Vec neighbors; pasted protocol text supplies the contextual design fields.</p></div>
+          </section>
+        </section>
+
+        <section id="jobs" class="band">
+          <div class="section-heading"><div><p class="eyebrow">Distributed workflow</p><h2>Prediction job lifecycle</h2></div><span id="job-id" class="mono">No active job</span></div>
+          <ol id="lifecycle" class="lifecycle"><li>Submitted</li><li>Sharded</li><li>Distributed</li><li>Running</li><li>Verified</li><li>Aggregated</li><li>Completed</li></ol>
+          <div id="job-detail" class="job-detail">Submit a protocol candidate to create a simulated job.</div>
+          <div id="job-list" class="job-list"></div>
+        </section>
+
+        <section id="results" class="results hidden">
+          <div class="section-heading"><div><p class="eyebrow">Results</p><h2>Experimental estimate and comparables</h2></div><span class="badge">Not validated</span></div>
+          <div id="result-candidates" class="candidate-results"></div>
+        </section>
+
+        <section id="devices" class="band devices-band">
+          <div class="section-heading"><div><p class="eyebrow">Device management</p><h2>Approved endpoint devices</h2></div><span class="badge neutral">Simulated capacity</span></div>
+          <div id="devices-grid" class="devices-grid"></div>
+        </section>
+      </main>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

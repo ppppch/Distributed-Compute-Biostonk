@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from clinical.evidence_catalog import EvidenceSource
+from clinical.metadata_catalog import TrialMetadataCatalog
 from clinical.trial_search import TrialSearch
 
 
@@ -29,7 +30,15 @@ class TestTrialSearch(unittest.TestCase):
                 "a.xlsx": EvidenceSource("source-a", "test", "a.xlsx", "hash-a", "2026-01-01T00:00:00+00:00"),
                 "b.xlsx": EvidenceSource("source-b", "test", "b.xlsx", "hash-b", "2026-01-01T00:00:00+00:00"),
             },
+            self.create_metadata_catalog(),
         )
+
+    def create_metadata_catalog(self):
+        metadata_path = Path(self.temporary_directory.name) / "metadata.json"
+        metadata_path.write_text(
+            '{"records":{"NCT002":{"conditions":["Rare disease"],"phases":["PHASE2"],"study_type":"INTERVENTIONAL"},"NCT003":{"conditions":["Other disease"],"phases":["PHASE1"],"study_type":"OBSERVATIONAL"}}}'
+        )
+        return TrialMetadataCatalog(metadata_path)
 
     def test_returns_closest_trial_with_provenance(self):
         results = self.search.find_comparables("NCT001", limit=1)
@@ -50,6 +59,14 @@ class TestTrialSearch(unittest.TestCase):
     def test_rejects_unknown_trial_identifier(self):
         with self.assertRaises(KeyError):
             self.search.find_comparables("NCT404")
+
+    def test_applies_verified_metadata_filters(self):
+        results = self.search.find_comparables(
+            "NCT001", condition="rare disease", phase="phase 2", study_type="interventional"
+        )
+
+        self.assertEqual([result.nct_id for result in results], ["NCT002"])
+        self.assertEqual(results[0].metadata["study_type"], "INTERVENTIONAL")
 
 
 if __name__ == "__main__":
