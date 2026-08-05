@@ -2,10 +2,17 @@
 
 ## Read This First
 
-This document is the working guide for the project lead and two interns for the
-August 3-7, 2026 demo sprint. Start with **Sprint Goal**, **Contribution Model**,
-and **Today** before changing code. The product requirements below remain the
-long-term reference, but the one-week plan controls this sprint.
+This document is the working guide for the project lead and interns Ryan and
+Maggie for the August 3-7, 2026 demo sprint. Start with **Sprint Goal**,
+**Contribution Model**, and **Today** before changing code. The product
+requirements below remain the long-term reference, but the one-week plan
+controls this sprint.
+
+**Mission this week:** improve the local web application at
+`http://127.0.0.1:8001`, make its complete demo workflow reliable and clear,
+and use what we learn to decide the next steps. This is not an agenda for the
+rest of the internship. The long-term sections are product context, not assigned
+intern tracks.
 
 BioStonk is not yet a clinical decision-support product. The repository has a
 working Trial2Vec retrieval workflow, an experimental demo estimate, a simulated
