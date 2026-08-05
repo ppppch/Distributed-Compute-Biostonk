@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from import_trials import validate_npz_schema, REQUIRED_NPZ_KEYS
+from clinical.import_trials import validate_npz_schema
 
 class TestImportTrialsValidation(unittest.TestCase):
 

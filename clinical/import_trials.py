@@ -3,6 +3,7 @@
 import argparse
 import logging
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from openpyxl import load_workbook
@@ -13,7 +14,7 @@ REQUIRED_COLUMNS = {"nct_id", "sentiment"}
 VALID_SENTIMENTS = {"0.0", "1.0"}
 REQUIRED_NPZ_KEYS = ["nct_id", "label_names", "source_workbook"]
 
-def validate_npz_schema(data_dict: Dict[str, Any]) -> Tuple[bool, str]:
+def validate_npz_schema(data_dict: dict[str, Any]) -> tuple[bool, str]:
     """Validates that loaded/processed dataset elements conform to the expected schema keys.
 
     Returns:
@@ -87,7 +88,11 @@ def main(input_directory: Path, output_path: Path) -> None:
     sources: list[str] = []
 
     for workbook in workbooks:
-        trial_ids, embeddings, sentiments, skipped_rows = read_workbook(workbook)
+        try:
+            trial_ids, embeddings, sentiments, skipped_rows = read_workbook(workbook)
+        except ValueError as error:
+            print(f"Skipping problematic file {workbook.name}: {error}")
+            continue
         all_ids.extend(trial_ids)
         all_embeddings.append(embeddings)
         all_sentiments.extend(sentiments)
@@ -96,12 +101,9 @@ def main(input_directory: Path, output_path: Path) -> None:
             f"Loaded {len(trial_ids):,} trials from {workbook.name}; "
             f"skipped {skipped_rows:,} malformed rows"
         )
-        except ValueError as err:
-            print(f"Skipping problematic file {workbook.name}: {err}")
 
-     if not all_embeddings:
+    if not all_embeddings:
         raise ValueError("No valid trial data could be loaded from any workbook.")
-    
 
     feature_matrix = np.vstack(all_embeddings)
     labels = np.asarray(all_sentiments, dtype=str)
@@ -120,9 +122,6 @@ def main(input_directory: Path, output_path: Path) -> None:
     if not is_valid:
         print(f"WARNING: Output validation failed ({validation_msg}). Proceeding with safe fallback structure.")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    
     np.savez_compressed(
         output_path,
         nct_id=np.asarray(all_ids, dtype=str),

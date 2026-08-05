@@ -1,6 +1,8 @@
 fastapi
 uvicorn
+requests
+httpx
 scikit-learn
 numpy
 joblib
-firebase-admin
+pytest
