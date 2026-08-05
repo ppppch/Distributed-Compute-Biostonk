@@ -1,435 +1,323 @@
-# BioStonk Clinical Compute
+# BioStonk Two-Computer Distributed Inference
 
-BioStonk is a local demonstration of a distributed clinical AI compute platform
-for CROs and pharmaceutical teams. A user can paste or upload a clinical-trial
-protocol, select a historical Trial2Vec anchor, submit one or two protocol
-candidates, watch a simulated distributed inference lifecycle, and inspect an
-experimental score with comparable historical trials.
+BioStonk is a centralized proof of concept for deterministic machine-learning
+inference across two laptops on the same local network. A FastAPI coordinator
+owns jobs and shards. Identical pull workers claim separate shards, run the same
+fixed scikit-learn digits model, and return predictions for ordered verification.
 
-The browser workspace is served by FastAPI at `http://127.0.0.1:8001`.
+This iteration is **not** a decentralized mesh. It does not provide peer-to-peer
+routing, NAT traversal, browser inference, blockchain coordination, cloud
+orchestration, or production security.
 
-## Demo Workflow
+## Architecture
 
-1. Paste a protocol or upload a `.txt`/`.md` draft.
-2. Complete the structured design and operational fields.
-3. Select a known NCT ID whose Trial2Vec embedding is in the local dataset.
-4. Optionally add a second candidate for comparison.
-5. Submit the job and watch it move through:
-
-  ```text
-  submitted -> sharded -> distributed -> running -> verified -> aggregated -> completed
-  ```
-
-6. Review the experimental estimate, factor values, risk indicators, five real
-  Trial2Vec nearest neighbors, mock devices, task assignments, and job history.
-
-## What Is Real and What Is Simulated
-
-**Real in the demo:**
-
-- Trial2Vec clinical-trial embeddings from the tracked Emde workbooks.
-- Cosine-similarity ranking over the imported embeddings.
-- Imported ClinicalTrials.gov metadata when present.
-- Source identifiers, URLs, timestamps, and content hashes.
-- Protocol completeness checks and deterministic draft hashes.
-
-**Simulated for the demo:**
-
-- Device enrollment, hardware telemetry, sharding, and endpoint execution.
-- Task verification and aggregation lifecycle transitions.
-- The numeric experimental estimate and any compute-cost assumptions.
-
-The score is labeled **Experimental demo estimate (not a validated clinical
-prediction)**. It is a transparent heuristic combining Trial2Vec similarity with
-available status, phase, enrollment, intervention-type, and protocol-coverage
-signals. It is not a probability of success and must not be used as clinical,
-operational, regulatory, or investment advice.
-
-The current Emde labels are sentiment labels, not historical trial outcomes. A
-validated prediction model would require approved outcome labels, calibration,
-external validation, and qualified clinical review.
-
-## Quick Start
-
-From a clean clone on macOS or Linux:
-
-```bash
-git clone https://github.com/ppppch/Distributed-Compute-Biostonk.git
-cd Distributed-Compute-Biostonk
-python3 -m venv venv
-venv/bin/python -m pip install --upgrade pip
-venv/bin/python -m pip install -r clinical/requirements.txt
+```text
+Client
+  |
+  | POST /demo/prediction-jobs
+  v
+FastAPI coordinator on Computer A
+  |-- computes the single-machine baseline
+  |-- creates two deterministic shards
+  |-- leases shard 1 <---- worker-a polls and claims
+  |-- leases shard 2 <---- worker-b polls and claims over the LAN
+  |-- validates indexes, checksums, leases, and worker IDs
+  |-- merges predictions in original input order
+  |-- compares merged predictions with the baseline
+  `-- marks the job completed or failed
 ```
 
-Generate the ignored local data artifacts:
-
-```bash
-venv/bin/python clinical/import_trials.py clinical/data/Emde
-venv/bin/python -m clinical.fetch_metadata --limit 25
-venv/bin/python -m clinical.import_metadata clinical/data/studies.json
-```
-
-The metadata refresh calls the official ClinicalTrials.gov API. Do this before
-the demo, not during a live presentation.
-
-Run the application:
-
-```bash
-venv/bin/python -m uvicorn clinical.api:app --host 127.0.0.1 --port 8001
-```
-
-Open [http://127.0.0.1:8001](http://127.0.0.1:8001). The API schema is available
-at [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs).
-
-## Test
-
-```bash
-venv/bin/python -m unittest discover -s tests -v
-```
-
-Generated datasets, metadata catalogs, review ledgers, and uploaded protocols
-must remain untracked. Never commit credentials, service-account files, PHI, or
-customer documents.
+Workers only make outbound requests to the coordinator. Computer A never needs
+to initiate an inbound connection to Computer B.
 
 ## Main Components
 
 | Path | Purpose |
 |---|---|
-| `clinical/static/` | Protocol workspace, jobs, results, comparison, and devices UI |
-| `clinical/api.py` | FastAPI application and demo endpoints |
-| `clinical/trial_search.py` | Trial2Vec cosine-similarity retrieval |
-| `clinical/demo_jobs.py` | In-memory simulated job coordinator and experimental score |
-| `clinical/protocol_analysis.py` | Draft coverage, hashing, and change signals |
-| `clinical/import_trials.py` | Emde workbook to local compressed embedding dataset |
-| `clinical/fetch_metadata.py` | Bounded ClinicalTrials.gov v2 cohort fetch |
-| `clinical/import_metadata.py` | NCT-keyed metadata catalog with provenance |
-| `BIOSTONK_IMPLEMENTATION_GUIDE.md` | One-week sprint plan, boundaries, and acceptance criteria |
+| `server/server.py` | FastAPI app and coordinator routes |
+| `server/coordinator.py` | Thread-safe jobs, workers, leases, retries, merge, and verification |
+| `server/inference.py` | Fixed digits split, RandomForest model, baseline, and checksums |
+| `server/schemas.py` | Pydantic API contracts |
+| `client/worker.py` | Pull worker with heartbeat, timeout, and bounded request retries |
+| `client/demo_client.py` | Submit and inspect demo jobs |
+| `tests/test_job_lifecycle.py` | Two-worker coordinator acceptance tests |
+| `clinical/` | Separate clinical product-demo workspace and API |
 
-Detailed clinical commands and API behavior are documented in
-[clinical/README.md](clinical/README.md).
+The older file-based pipeline remains available through the `legacy-*` Make
+targets for comparison. It is not the active LAN architecture.
 
-## Demo API
+## Installation
 
-| Method and path | Purpose |
-|---|---|
-| `POST /protocol-drafts/analyze` | Analyze draft coverage and changes without a validated prediction |
-| `POST /demo/prediction-jobs` | Submit one or two protocol candidates |
-| `POST /demo/prediction-jobs/{job_id}/advance` | Advance one simulated lifecycle stage |
-| `GET /demo/prediction-jobs/history` | List local submitted, active, and completed jobs |
-| `GET /demo/devices` | List approved mock devices and assigned tasks |
-| `GET /trials/{nct_id}/comparables` | Retrieve real Trial2Vec nearest neighbors |
-
-## Firebase
-
-Firebase is not used by the clinical demo. The legacy MNIST server includes an
-optional write-only Firestore audit integration. Do not enable or extend it
-without checking Firebase usage first. Its normal path performs zero Firestore
-reads.
-
-## Contributing This Week
-
-Read [BIOSTONK_IMPLEMENTATION_GUIDE.md](BIOSTONK_IMPLEMENTATION_GUIDE.md) before
-starting. Intern contributions are candidate implementations, not assigned
-roles. Keep patches small, state planned files, include focused tests or visual
-evidence, and preserve all experimental/simulation labels. The project lead may
-select, combine, modify, or reject submitted work.
-
----
-
-## Legacy Distributed MNIST Digit Inference
-
-This project runs handwritten-digit inference across **two real machines**:
-
-- **Server computer** — hosts the trained model and answers prediction requests over HTTP.
-- **Client computer** — splits the job, processes half locally, sends the other half to the server, and verifies the combined result.
-
-The old two-file simulation in `simulation/` is no longer used; it’s just kept for reference.
-
-Clinical-trial embedding data can be imported through [clinical/README.md](clinical/README.md).
-
----
-
-## What you need first
-
-Install these on whichever computer runs the baseline and the client:
+Use the same repository commit and Python dependencies on both computers.
 
 ```bash
-pip install requests numpy scikit-learn joblib
+python3 -m venv .venv
+source .venv/bin/activate
+make install
 ```
 
-The server only needs:
+The coordinator and each worker deterministically train the same lightweight
+RandomForest at startup. No model download or LLM is required. Generated model,
+dataset, cache, and virtual-environment files are ignored by Git.
+
+## Configuration
+
+| Variable | Default | Used by |
+|---|---:|---|
+| `COORDINATOR_HOST` | `0.0.0.0` | Coordinator bind host |
+| `COORDINATOR_PORT` | `8000` | Coordinator port |
+| `COORDINATOR_URL` | `http://127.0.0.1:8000` | Workers and demo client |
+| `WORKER_ID` | Local hostname | Worker identity |
+| `WORKER_POLL_INTERVAL` | `1` second | Worker polling |
+| `WORKER_HEARTBEAT_INTERVAL` | `5` seconds | Worker heartbeat |
+| `SHARD_LEASE_SECONDS` | `30` seconds | Coordinator lease duration |
+| `REQUEST_TIMEOUT_SECONDS` | `10` seconds | Worker/client HTTP timeout |
+| `WORKER_HEARTBEAT_TIMEOUT_SECONDS` | `30` seconds | Worker availability display |
+| `WORKER_REQUEST_ATTEMPTS` | `3` | Bounded HTTP attempts |
+| `MAX_SHARD_ATTEMPTS` | `3` | Bounded shard attempts |
+
+No private IP address is hardcoded.
+
+## Single-Computer Demo
+
+Use four terminals from the repository root.
+
+Terminal 1, coordinator:
 
 ```bash
-pip install fastapi uvicorn scikit-learn numpy joblib firebase-admin
+make coordinator
 ```
 
-(or run `pip install -r server/requirements.txt` from the server folder).
-
-### Firebase audit (optional)
-
-The server can write a small audit record for each inference request to the
-Firestore project `civicgrid-e8b69`. The prediction path never reads Firestore:
-each request writes one `inference_jobs` document at start and updates it at
-completion. Images and predictions are not stored in Firestore.
-
-Create a Firestore database in the CivicGrid Firebase console, then authenticate
-the server with Application Default Credentials or a service-account key kept
-outside this repository. Enable the audit when starting the server:
+Terminal 2, first worker:
 
 ```bash
-export FIRESTORE_AUDIT_ENABLED=true
-export FIREBASE_PROJECT_ID=civicgrid-e8b69
-export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json
-uvicorn server:app --host 0.0.0.0 --port 8000
+make worker WORKER_ID=worker-a
 ```
 
-This design uses **0 Firestore reads per inference job**. Avoid listeners,
-collection queries, and polling the job document; use the synchronous `/predict`
-response instead. At 50,000 inference jobs, it remains at 0 reads and uses
-100,000 Firestore writes.
-
----
-
-## Step 0: Build the baseline
-
-On **one** computer (it can be the client, the server, or a third machine), run:
+Terminal 3, second worker:
 
 ```bash
-make baseline
+make worker WORKER_ID=worker-b
 ```
 
-You should see output like this:
-
-```
-Train set: 1257 samples -> train.npz
-Job set:   540 samples -> job.npz
-Model trained and saved to baseline_model.joblib
-Processed 540 samples in ...
-Accuracy: 0.9667
-Fingerprint (hash): a4b7968caf3ccc0f397d81d2ed7e4acbedf7fec14c86596e4a116b1172ceadd4
-Baseline pipeline complete. Model saved to shared/baseline_model.joblib
-```
-
-This creates three things you need for the distributed run:
-
-- `shared/baseline_model.joblib` — the trained model
-- `baseline/job.npz` — the 540 images that will be split across machines
-- `baseline/baseline_report.json` — the answer key/hash
-
----
-
-## Quick test: one computer, two terminals
-
-You can test the whole two-machine flow on a single computer using two terminal windows.
-
-### Terminal 1 — start the server
+Terminal 4, submit the job:
 
 ```bash
-cd server
-uvicorn server:app --host 0.0.0.0 --port 8000
+make submit-demo
 ```
 
-You should see:
-
-```
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
-
-Leave this running.
-
-### Terminal 2 — run the client
-
-From the project root:
+The submission response includes the job ID and ends in `distributed`, ready for
+worker claims. After both workers return results, inspect all jobs:
 
 ```bash
-make split
-make worker_local
-cd client
-python3 send_to_server.py --url http://127.0.0.1:8000/predict
-python3 combine_and_verify.py
+make demo-status
 ```
 
-Expected final output:
-
-```
-Sent 270 samples to http://127.0.0.1:8000/predict (Part 2)
-Baseline hash:    a4b7968caf3ccc0f397d81d2ed7e4acbedf7fec14c86596e4a116b1172ceadd4
-Distributed hash: a4b7968caf3ccc0f397d81d2ed7e4acbedf7fec14c86596e4a116b1172ceadd4
-MATCH - distributed results are identical to the baseline.
-```
-
-The hash on your machine may be different, but the important part is `MATCH`.
-
-To stop the server, go back to Terminal 1 and press `Ctrl + C`.
-
----
-
-## Real test: two separate computers
-
-### Computer A — the server
-
-1. Copy these to the server computer, keeping the same folder layout:
-
-   ```
-   server/
-   shared/baseline_model.joblib
-   ```
-
-   So the server folder looks like:
-
-   ```
-   server/
-     server.py
-     requirements.txt
-   shared/
-     baseline_model.joblib
-   ```
-
-2. Install server dependencies:
-
-   ```bash
-   cd server
-   pip install -r requirements.txt
-   ```
-
-3. Start the server:
-
-   ```bash
-   uvicorn server:app --host 0.0.0.0 --port 8000
-   ```
-
-   Note the server’s IP address (for example, `192.168.1.50`).
-
-### Computer B — the client
-
-1. Copy these to the client computer, keeping the same folder layout:
-
-   ```
-   client/
-   baseline/
-   shared/baseline_model.joblib
-   Makefile
-   ```
-
-   So the client folder looks like:
-
-   ```
-   client/
-     split_job.py
-     run_worker_local.py
-     send_to_server.py
-     combine_and_verify.py
-   baseline/
-     job.npz
-     baseline_report.json
-   shared/
-     baseline_model.joblib
-   Makefile
-   ```
-
-2. Install client dependencies:
-
-   ```bash
-   pip install requests numpy scikit-learn joblib
-   ```
-
-3. Run the client pipeline. Replace `<server-ip>` with the server’s actual IP:
-
-   ```bash
-   make split
-   make worker_local
-   cd client
-   python3 send_to_server.py --url http://<server-ip>:8000/predict
-   python3 combine_and_verify.py
-   ```
-
-   Example:
-
-   ```bash
-   python3 send_to_server.py --url http://192.168.1.50:8000/predict
-   ```
-
-4. You should see:
-
-   ```
-   Sent 270 samples to http://192.168.1.50:8000/predict (Part 2)
-   Baseline hash:    ...
-   Distributed hash: ...
-   MATCH - distributed results are identical to the baseline.
-   ```
-
----
-
-## What each file does
-
-| File | Purpose |
-|---|---|
-| `baseline/prepare_dataset.py` | Splits raw digits into `train.npz` and `job.npz` |
-| `baseline/train_model.py` | Trains the model and saves it to `shared/baseline_model.joblib` |
-| `baseline/run_baseline.py` | Runs inference on the full job and creates `baseline_report.json` (the answer key) |
-| `server/server.py` | FastAPI server that loads the model and exposes `POST /predict` |
-| `client/split_job.py` | Splits `job.npz` into `job_part1.npz` and `job_part2.npz` |
-| `client/run_worker_local.py` | Processes `job_part1.npz` locally, saves `results_part1.npz` |
-| `client/send_to_server.py` | Sends `job_part2.npz` to the server, saves `results_part2.npz` |
-| `client/combine_and_verify.py` | Combines both result files and checks the fingerprint |
-
----
-
-## Using the server API directly
-
-`POST /predict`
-
-Request body:
-
-```json
-{
-  "images": [[0.0, 1.0, ...], ...],
-  "original_index": [0, 1, ...]
-}
-```
-
-Response:
-
-```json
-{
-  "predictions": [3, 7, ...],
-  "original_index": [0, 1, ...]
-}
-```
-
-Quick curl test:
+Or inspect one job:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"images": [[0.0, 0.0, ...]], "original_index": [0]}'
+make demo-status JOB_ID=job-xxxxxxxxxxxx
 ```
 
----
-
-## Makefile targets
+List registered workers:
 
 ```bash
-make baseline      # full single-computer baseline
-make prepare       # split raw data
-make train         # train and save the model
-make baseline_run  # run single-computer inference
-make split         # split job.npz into two chunks
-make worker_local  # run the local client worker (Part 1)
-make test          # run Maggie's unit and integration tests
-make clean         # delete all generated files
+make workers
 ```
 
----
+## Two-Computer LAN Demo
 
-## About `simulation/`
+Both computers must be on the same local network and checked out at the same
+commit. The operating-system firewall may need to allow inbound TCP traffic to
+port `8000` on Computer A.
 
-`simulation/run_worker1.py` and `simulation/run_worker2.py` are the old
-single-computer simulation. They pretended to be two separate machines by
-reading two different `.npz` files in the same filesystem. The project now uses
-the real server/client code in `server/` and `client/`.
+### Computer A
 
-The original root-level scripts and Maggie's tests are also retained for
-compatibility. Run `make legacy-baseline`, then `make legacy-workers` to use the
-local simulation path.
+Find its Wi-Fi LAN address on macOS:
+
+```bash
+ipconfig getifaddr en0
+```
+
+Start the coordinator on all interfaces:
+
+```bash
+COORDINATOR_HOST=0.0.0.0 COORDINATOR_PORT=8000 make coordinator
+```
+
+Equivalent direct command:
+
+```bash
+./.venv/bin/python -m uvicorn server.server:app --host 0.0.0.0 --port 8000
+```
+
+Optionally run the first worker on Computer A:
+
+```bash
+COORDINATOR_URL=http://127.0.0.1:8000 WORKER_ID=worker-a \
+  ./.venv/bin/python -m client.worker
+```
+
+### Computer B
+
+Replace `<COMPUTER_A_LAN_IP>` with the result from Computer A:
+
+```bash
+COORDINATOR_URL=http://<COMPUTER_A_LAN_IP>:8000 WORKER_ID=worker-b \
+  ./.venv/bin/python -m client.worker
+```
+
+Check connectivity from Computer B before submitting a job:
+
+```bash
+curl http://<COMPUTER_A_LAN_IP>:8000/health
+```
+
+### Submit And Inspect
+
+On Computer A:
+
+```bash
+COORDINATOR_URL=http://127.0.0.1:8000 make submit-demo
+COORDINATOR_URL=http://127.0.0.1:8000 make demo-status
+```
+
+A successful job reports:
+
+- `status: completed`
+- two shards with different `worker_id` values
+- `exact_match_count` equal to `sample_count`
+- `mismatch_count: 0`
+- identical `baseline_checksum` and `distributed_checksum`
+- baseline and per-shard processing durations
+
+The two shard records are the proof that both registered workers participated.
+Each also records attempt count, timestamps, checksum, duration, and any error.
+
+## Job Lifecycle
+
+The successful lifecycle is:
+
+```text
+submitted -> sharded -> distributed -> processing -> verifying -> completed
+```
+
+`client.demo_client submit` creates a job and advances it to `distributed`.
+The first claim moves it to `processing`. The final shard result triggers merge
+and verification. A completed job stays completed if its advance endpoint is
+called again. Integrity or exhausted-retry failures move the job to `failed`.
+
+State is held in a thread-safe in-memory store. Restarting the coordinator clears
+all jobs and worker registrations.
+
+## API
+
+| Method | Route | Purpose |
+|---|---|---|
+| `GET` | `/health` | Coordinator health and model version |
+| `POST` | `/workers/register` | Register or refresh a worker |
+| `GET` | `/workers` | Inspect workers and heartbeat status |
+| `POST` | `/workers/{worker_id}/heartbeat` | Refresh worker heartbeat |
+| `POST` | `/workers/{worker_id}/next-shard` | Atomically claim a shard; `204` if none |
+| `POST` | `/workers/{worker_id}/results` | Submit success or failure metadata |
+| `POST` | `/demo/prediction-jobs` | Create a deterministic job |
+| `GET` | `/demo/prediction-jobs` | List in-progress, completed, and failed jobs |
+| `GET` | `/demo/prediction-jobs/history` | Compatibility alias for job history |
+| `GET` | `/demo/prediction-jobs/{job_id}` | Inspect one job |
+| `POST` | `/demo/prediction-jobs/{job_id}/advance` | Advance a valid lifecycle stage |
+| `POST` | `/predict` | Compatibility endpoint for direct inference |
+
+Interactive OpenAPI documentation is available at `http://127.0.0.1:8000/docs`.
+
+## Verification
+
+For every job, the coordinator first predicts the complete input on Computer A
+and records its SHA-256 checksum and processing time. It then splits original
+indexes into deterministic, non-overlapping shards.
+
+A result is accepted only when:
+
+1. The worker is registered and holds the active lease.
+2. Returned indexes exactly match the shard with no duplicates.
+3. Prediction and index counts match.
+4. The reported checksum matches the returned predictions.
+
+After every shard completes, the coordinator sorts by original index, rejects
+missing or duplicated indexes, computes the distributed checksum, and compares
+every prediction with the baseline. Any mismatch fails the job.
+
+Duplicate submission of the same completed result is idempotent. Conflicting
+duplicates are rejected. Expired leases can be claimed by another worker, and
+worker-reported failures are retried up to `MAX_SHARD_ATTEMPTS`.
+
+## Tests
+
+Run the full suite:
+
+```bash
+make test
+```
+
+Equivalent command:
+
+```bash
+./.venv/bin/python -m pytest -q
+```
+
+The suite covers the existing clinical and file-based behavior plus worker
+registration, lifecycle order, atomic claims, two distinct workers, exact
+baseline matching, ordered merge, malformed and unknown results, duplicate
+idempotency, lease expiration, checksum failure, and worker-failure isolation.
+
+At the time of this implementation, the local result is:
+
+```text
+52 passed
+```
+
+## Troubleshooting
+
+**Computer B cannot reach `/health`:** confirm both machines are on the same
+network, use Computer A's LAN IP rather than `127.0.0.1`, and permit port `8000`
+through the firewall.
+
+**Worker receives `404 Unknown worker ID`:** restart the worker so it registers,
+or call `/workers/register` before worker-specific routes.
+
+**Worker repeatedly receives `204`:** ensure a job exists and has advanced to
+`distributed`. Check `make demo-status` and `make workers`.
+
+**Job remains in `processing`:** inspect shard errors and worker heartbeat times.
+An abandoned lease becomes eligible for reassignment after
+`SHARD_LEASE_SECONDS`.
+
+**Model version mismatch:** update both machines to the same commit, recreate the
+virtual environments, and run `make install` on both.
+
+**Checksum mismatch:** inspect the failed shard's indexes, predictions, and model
+version. The coordinator records the reported and calculated checksum in the job
+errors.
+
+## Current Limitations
+
+- Physical two-computer LAN validation is still pending; automated two-worker
+  integration tests pass on one machine.
+- The coordinator is centralized and in-memory with no authentication or TLS.
+- Workers poll over HTTP; there is no push channel or peer discovery.
+- Every process trains the small deterministic model at startup.
+- Jobs use the built-in digits dataset and two shards by default.
+- Restarting the coordinator clears jobs and registered workers.
+- The separate clinical workspace remains a simulated product demo and is not
+  executed by these physical workers.
+
+## Future Work
+
+After a successful physical LAN rehearsal, useful next steps are durable job
+storage, authenticated worker enrollment, TLS, artifact/model distribution,
+lease observability, and broader fault-injection testing. A decentralized mesh
+would require a separate architecture and is intentionally outside this proof of
+concept.
+
+Clinical product-demo documentation remains in
+[`clinical/README.md`](clinical/README.md), and sprint boundaries remain in
+[`BIOSTONK_IMPLEMENTATION_GUIDE.md`](BIOSTONK_IMPLEMENTATION_GUIDE.md).
