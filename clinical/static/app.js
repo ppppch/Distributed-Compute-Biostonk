@@ -114,7 +114,7 @@ async function advanceJob() {
 
 function renderResults(results) {
   byId("results").classList.remove("hidden");
-  byId("result-candidates").innerHTML = results.map((result) => `<article class="result-panel"><p class="eyebrow">${result.candidate_id}</p><div class="score-line"><span class="score">${result.experimental_demo_estimate}</span><span class="score-caption">${result.score_label}</span></div><h3>Contributing factors</h3><table class="data-table"><thead><tr><th>Factor</th><th>Value</th><th>Weight</th></tr></thead><tbody>${result.factors.map((factor) => `<tr><td>${factor.factor}</td><td>${factor.value ?? "Unavailable"}</td><td>${factor.weight}</td></tr>`).join("")}</tbody></table><h3>Similar historical trials</h3><table class="data-table"><thead><tr><th>NCT</th><th>Similarity</th><th>Status</th><th>Phase</th></tr></thead><tbody>${result.similar_historical_trials.map((trial) => `<tr><td>${trial.nct_id}</td><td>${trial.similarity}</td><td>${trial.metadata?.overall_status || "Unavailable"}</td><td>${trial.metadata?.phases?.join(", ") || "Unavailable"}</td></tr>`).join("")}</tbody></table><h3>Demo indicators</h3><ul class="risk-list">${result.risk_indicators.map((item) => `<li>${item}</li>`).join("")}</ul><h3>Coverage prompts</h3><div class="recommendations">${result.recommendations.map((item) => `<p>${item}</p>`).join("")}</div></article>`).join("");
+  byId("result-candidates").innerHTML = results.map((result) => `<article class="result-panel"><p class="eyebrow">${result.candidate_id}</p><div class="score-line"><span class="score">${result.experimental_demo_estimate}</span><span class="score-caption">${result.score_label}</span></div><h3>Contributing factors</h3><table class="data-table"><thead><tr><th>Factor</th><th>Value</th><th>Weight</th><th>Contribution</th><th>Source type</th><th>Availability</th></tr></thead><tbody>${result.factors.map((factor) => `<tr><td>${factor.factor}</td><td>${factor.value ?? "Unavailable"}</td><td>${factor.weight}</td><td>${factor.contribution ?? "—"}</td><td>${factor.source_type}</td><td>${factor.availability}</td></tr>`).join("")}</tbody></table><h3>Similar historical trials</h3><table class="data-table"><thead><tr><th>NCT</th><th>Similarity</th><th>Status</th><th>Phase</th></tr></thead><tbody>${result.similar_historical_trials.map((trial) => `<tr><td>${trial.nct_id}</td><td>${trial.similarity}</td><td>${trial.metadata?.overall_status || "Unavailable"}</td><td>${trial.metadata?.phases?.join(", ") || "Unavailable"}</td></tr>`).join("")}</tbody></table><h3>Demo indicators</h3><ul class="risk-list">${result.risk_indicators.map((item) => `<li>${item}</li>`).join("")}</ul><h3>Coverage prompts</h3><div class="recommendations">${result.recommendations.map((item) => `<p>${item}</p>`).join("")}</div></article>`).join("");
 }
 
 async function loadJobs() {
@@ -213,7 +213,6 @@ class AnchorCombobox {
   setLoading(isLoading) {
     this.container.classList.toggle("loading", isLoading);
     this.searchInput.setAttribute("aria-busy", isLoading ? "true" : "false");
-    this.searchInput.disabled = isLoading;
   }
 
   setDisabled(isDisabled) {

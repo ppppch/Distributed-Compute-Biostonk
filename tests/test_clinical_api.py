@@ -259,6 +259,75 @@ class TestClinicalApi(unittest.TestCase):
         self.assertEqual(devices.status_code, 200)
         self.assertTrue(devices.json()[0]["approved"])
 
+    def test_factor_response_includes_version_contribution_source_availability(self):
+        created = self.client.post(
+            "/demo/prediction-jobs",
+            json={
+                "candidates": [
+                    {
+                        "candidate_id": "candidate-a",
+                        "anchor_nct_id": "NCT001",
+                        "draft": {
+                            "protocol_text": "Protocol candidate A",
+                            "indication": "Rare disease",
+                            "study_phase": "PHASE2",
+                            "population": "Adults",
+                            "intervention": "Example drug",
+                            "intervention_type": "DRUG",
+                            "comparator": "Standard care",
+                            "primary_endpoint": "Functional outcome",
+                            "planned_enrollment": 80,
+                            "planned_site_count": 4,
+                        },
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(created.status_code, 200)
+        result = created.json()["results"][0]
+        score = result["experimental_demo_estimate"]
+        factors = result["factors"]
+
+        self.assertEqual(len(factors), 6)
+        total_contribution = 0
+        for factor in factors:
+            self.assertEqual(factor["formula_version"], "phase1-experimental-demo-v1")
+            self.assertIn(factor["source_type"], {"embedding", "metadata", "protocol"})
+            self.assertIn(factor["availability"], {"available", "unavailable"})
+            if factor["value"] is not None:
+                self.assertIsInstance(factor["contribution"], float)
+                total_contribution += factor["contribution"]
+            else:
+                self.assertIsNone(factor["contribution"])
+                self.assertEqual(factor["availability"], "unavailable")
+
+        self.assertAlmostEqual(round(total_contribution), score, delta=1)
+
+    def test_factor_availability_reflects_missing_inputs(self):
+        created = self.client.post(
+            "/demo/prediction-jobs",
+            json={
+                "candidates": [
+                    {
+                        "candidate_id": "candidate-a",
+                        "anchor_nct_id": "NCT001",
+                        "draft": {
+                            "protocol_text": "Sparse protocol",
+                        },
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(created.status_code, 200)
+        factors = {factor["factor"]: factor for factor in created.json()["results"][0]["factors"]}
+
+        self.assertEqual(factors["Available phase alignment"]["availability"], "unavailable")
+        self.assertEqual(factors["Available enrollment alignment"]["availability"], "unavailable")
+        self.assertEqual(factors["Available intervention-type alignment"]["availability"], "unavailable")
+        self.assertEqual(factors["Protocol design coverage"]["availability"], "available")
+
     def test_approves_and_finalizes_reviewable_brief(self):
         created = self.client.post("/reviewable-briefs", json=self.reviewable_brief_request()).json()
 

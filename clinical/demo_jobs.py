@@ -16,6 +16,7 @@ DEVICES = (
     {"device_id": "PHARMA-DS-007", "name": "Translational Science Node 07", "type": "Internal workstation", "cpu_cores": 24, "memory_gb": 128, "availability": "available", "approved": True},
     {"device_id": "CRO-WS-021", "name": "Biometrics Workstation 21", "type": "Internal workstation", "cpu_cores": 12, "memory_gb": 32, "availability": "maintenance", "approved": True},
 )
+SCORE_VERSION = "phase1-experimental-demo-v1"
 
 
 class DemoJobCoordinator:
@@ -92,8 +93,8 @@ class DemoJobCoordinator:
         score_metadata = ([anchor_metadata] if anchor_metadata else []) + [
             trial["metadata"] for trial in trial_records if trial["metadata"]
         ]
-        score = experimental_score(candidate, trial_records, score_metadata)
         protocol_analysis = analyze_protocol_draft(ProtocolDraftAnalysisRequest(draft=candidate.draft))
+        score = experimental_score(candidate, trial_records, score_metadata, protocol_analysis)
         return {
             "candidate_id": candidate.candidate_id,
             "anchor_nct_id": candidate.anchor_nct_id,
@@ -107,27 +108,93 @@ class DemoJobCoordinator:
         }
 
 
-def experimental_score(candidate: PredictionCandidate, trials: list[dict[str, Any]], metadata: list[dict[str, Any]]) -> int:
-    similarities = [trial["similarity"] for trial in trials]
-    similarity_points = (statistics.fmean(similarities) if similarities else 0) * 50
-    completed_points = status_fraction(metadata, "COMPLETED") * 15
-    phase_points = phase_fraction(metadata, candidate.draft.study_phase) * 10
-    enrollment_points = enrollment_alignment(metadata, candidate.draft.planned_enrollment) * 10
-    intervention_points = intervention_fraction(metadata, candidate.draft.intervention_type) * 10
-    coverage_points = (len(metadata) / len(trials) if trials else 0) * 5
-    return round(max(0, min(100, similarity_points + completed_points + phase_points + enrollment_points + intervention_points + coverage_points)))
+def experimental_score(candidate: PredictionCandidate, trials: list[dict[str, Any]], metadata: list[dict[str, Any]], analysis: dict[str, Any]) -> int:
+    factors = _factor_definitions(candidate, trials, metadata, analysis)
+    total = sum(factor["contribution"] for factor in factors if factor["contribution"] is not None)
+    return round(max(0, min(100, total)))
 
 
 def score_factors(candidate: PredictionCandidate, trials: list[dict[str, Any]], metadata: list[dict[str, Any]], analysis: dict[str, Any]) -> list[dict[str, Any]]:
+    return _factor_definitions(candidate, trials, metadata, analysis)
+
+
+def _factor_definitions(
+    candidate: PredictionCandidate,
+    trials: list[dict[str, Any]],
+    metadata: list[dict[str, Any]],
+    analysis: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return one transparent factor record per scoring input.
+
+    Each record contains the raw value, its weight, the points it contributes
+    to the 0-100 experimental demo estimate, provenance, and availability.
+    """
     similarities = [trial["similarity"] for trial in trials]
-    return [
-        {"factor": "Trial2Vec similarity", "value": round(statistics.fmean(similarities), 3) if similarities else None, "weight": "50%", "source": "Trial2Vec embeddings"},
-        {"factor": "Available historical completion status", "value": round(status_fraction(metadata, "COMPLETED"), 3), "weight": "15%", "source": "Imported ClinicalTrials.gov metadata"},
-        {"factor": "Available phase alignment", "value": round(phase_fraction(metadata, candidate.draft.study_phase), 3), "weight": "10%", "source": "Imported ClinicalTrials.gov metadata"},
-        {"factor": "Available enrollment alignment", "value": round(enrollment_alignment(metadata, candidate.draft.planned_enrollment), 3), "weight": "10%", "source": "Imported ClinicalTrials.gov metadata"},
-        {"factor": "Available intervention-type alignment", "value": round(intervention_fraction(metadata, candidate.draft.intervention_type), 3), "weight": "10%", "source": "Imported ClinicalTrials.gov metadata"},
-        {"factor": "Protocol design coverage", "value": analysis["coverage"]["provided_design_field_count"], "weight": "5%", "source": "Submitted protocol"},
+    required_design_fields = analysis["coverage"]["required_design_field_count"]
+    provided_design_fields = analysis["coverage"]["provided_design_field_count"]
+    design_coverage = provided_design_fields / required_design_fields if required_design_fields else 0
+
+    definitions: list[dict[str, Any]] = [
+        {
+            "factor": "Trial2Vec similarity",
+            "value": round(statistics.fmean(similarities), 3) if similarities else None,
+            "weight": "50%",
+            "source": "Trial2Vec embeddings",
+            "source_type": "embedding",
+            "availability": "available" if similarities else "unavailable",
+        },
+        {
+            "factor": "Available historical completion status",
+            "value": round(status_fraction(metadata, "COMPLETED"), 3),
+            "weight": "15%",
+            "source": "Imported ClinicalTrials.gov metadata",
+            "source_type": "metadata",
+            "availability": "available" if metadata else "unavailable",
+        },
+        {
+            "factor": "Available phase alignment",
+            "value": round(phase_fraction(metadata, candidate.draft.study_phase), 3),
+            "weight": "10%",
+            "source": "Imported ClinicalTrials.gov metadata",
+            "source_type": "metadata",
+            "availability": "available" if (metadata and candidate.draft.study_phase) else "unavailable",
+        },
+        {
+            "factor": "Available enrollment alignment",
+            "value": round(enrollment_alignment(metadata, candidate.draft.planned_enrollment), 3),
+            "weight": "10%",
+            "source": "Imported ClinicalTrials.gov metadata",
+            "source_type": "metadata",
+            "availability": "available" if (metadata and candidate.draft.planned_enrollment is not None) else "unavailable",
+        },
+        {
+            "factor": "Available intervention-type alignment",
+            "value": round(intervention_fraction(metadata, candidate.draft.intervention_type), 3),
+            "weight": "10%",
+            "source": "Imported ClinicalTrials.gov metadata",
+            "source_type": "metadata",
+            "availability": "available" if (metadata and candidate.draft.intervention_type) else "unavailable",
+        },
+        {
+            "factor": "Protocol design coverage",
+            "value": round(design_coverage, 3),
+            "weight": "5%",
+            "source": "Submitted protocol",
+            "source_type": "protocol",
+            "availability": "available" if required_design_fields else "unavailable",
+        },
     ]
+
+    for definition in definitions:
+        definition["formula_version"] = SCORE_VERSION
+        weight_decimal = float(definition["weight"].rstrip("%")) / 100
+        definition["contribution"] = (
+            round(definition["value"] * weight_decimal * 100, 2)
+            if definition["value"] is not None
+            else None
+        )
+
+    return definitions
 
 
 def risk_indicators(trials: list[dict[str, Any]], analysis: dict[str, Any]) -> list[str]:
