@@ -22,6 +22,7 @@
       </aside>
 
       <main>
+        <div id="sr-status" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
         <header class="topbar">
           <div><p class="eyebrow">CRO &amp; Pharma Operations</p><h1>Protocol prediction workspace</h1></div>
           <div class="badge">Experimental demo estimates</div>
@@ -66,7 +67,8 @@
                 <label>Planned enrollment<input id="planned-enrollment-b" type="number" min="1" value="120"></label>
               </div>
             </section>
-            <button class="primary" type="submit">Submit prediction job</button>
+            <button id="submit-job" class="primary" type="submit" aria-describedby="submit-status">Submit prediction job</button>
+            <span id="submit-status" class="visually-hidden">Button is disabled while a prediction job is submitting or running.</span>
           </form>
 
           <section class="signal-panel">

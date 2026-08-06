@@ -31,6 +31,30 @@ async function analyzeDraft() {
 function label(value) { return `<li>${value.replaceAll("_", " ")}</li>`; }
 function lifecycle(job) { byId("job-id").textContent = job.job_id; byId("job-detail").textContent = job.execution_notice; const index = job.lifecycle.indexOf(job.status); [...byId("lifecycle").children].forEach((item, i) => { item.className = i === index ? "current" : i < index ? "active" : ""; }); }
 
+function announce(message) {
+  const region = byId("sr-status");
+  if (!region) return;
+  region.textContent = "";
+  requestAnimationFrame(() => { region.textContent = message; });
+}
+
+function setFormDisabled(disabled, reason) {
+  const form = byId("protocol-form");
+  const submitButton = byId("submit-job");
+  const controls = form.querySelectorAll("input, textarea, select, button");
+  controls.forEach((control) => {
+    if (control.classList.contains("anchor-search")) return; // managed by AnchorCombobox
+    control.disabled = disabled;
+  });
+  anchorA.setDisabled(disabled);
+  anchorB.setDisabled(disabled);
+  submitButton.disabled = disabled;
+  submitButton.setAttribute("aria-disabled", disabled ? "true" : "false");
+  if (disabled && reason) {
+    announce(reason);
+  }
+}
+
 async function submitJob(event) {
   event.preventDefault();
   const candidates = [candidateFromForm("candidate-a")];
@@ -40,10 +64,15 @@ async function submitJob(event) {
     byId("job-detail").textContent = "Please select a Trial2Vec anchor for every candidate.";
     return;
   }
+  setFormDisabled(true, "Submitting prediction job. Please wait.");
   byId("job-detail").textContent = "Submitting prediction job...";
   const response = await fetch("/demo/prediction-jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidates }) });
   const job = await response.json();
-  if (!response.ok) { byId("job-detail").textContent = job.detail || "Job could not be submitted."; return; }
+  if (!response.ok) {
+    setFormDisabled(false);
+    byId("job-detail").textContent = job.detail || "Job could not be submitted.";
+    return;
+  }
   state.activeJob = job; lifecycle(job); byId("results").classList.add("hidden"); loadJobs();
   clearInterval(state.jobTimer); state.jobTimer = setInterval(advanceJob, 650);
   loadDevices();
@@ -52,7 +81,12 @@ async function submitJob(event) {
 async function advanceJob() {
   const response = await fetch(`/demo/prediction-jobs/${state.activeJob.job_id}/advance`, { method: "POST" });
   state.activeJob = await response.json(); lifecycle(state.activeJob); loadDevices(); loadJobs();
-  if (state.activeJob.status === "completed") { clearInterval(state.jobTimer); renderResults(state.activeJob.results); }
+  if (state.activeJob.status === "completed") {
+    clearInterval(state.jobTimer);
+    renderResults(state.activeJob.results);
+    setFormDisabled(false);
+    announce("Prediction job completed. Form controls are available.");
+  }
 }
 
 function renderResults(results) {
@@ -87,7 +121,7 @@ class AnchorCombobox {
     this.searchInput.addEventListener("input", () => this.onInput());
     this.searchInput.addEventListener("keydown", (event) => this.onKeyDown(event));
     this.searchInput.addEventListener("blur", () => this.onBlur());
-    this.searchInput.addEventListener("focus", () => { if (this.searchInput.value.trim()) this.fetchAnchors(this.searchInput.value.trim()); });
+    this.searchInput.addEventListener("focus", () => { if (this.searchInput.disabled) return; if (this.searchInput.value.trim()) this.fetchAnchors(this.searchInput.value.trim()); });
     this.listbox.addEventListener("mousedown", (event) => this.onOptionClick(event));
   }
 
@@ -154,6 +188,12 @@ class AnchorCombobox {
   setLoading(isLoading) {
     this.container.classList.toggle("loading", isLoading);
     this.searchInput.setAttribute("aria-busy", isLoading ? "true" : "false");
+    this.searchInput.disabled = isLoading;
+  }
+
+  setDisabled(isDisabled) {
+    this.searchInput.disabled = isDisabled;
+    if (isDisabled) this.closeListbox();
   }
 
   onKeyDown(event) {

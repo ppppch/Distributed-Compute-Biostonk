@@ -17,6 +17,16 @@ label { display:grid; gap:6px; font-weight:700; font-size:11px; color:#34443d; }
 @media (max-width:1000px) { .shell { grid-template-columns:1fr; }.sidebar { display:none; }.workspace-grid { grid-template-columns:1fr; }.devices-grid { grid-template-columns:1fr; }.lifecycle { grid-template-columns:repeat(4,1fr); } }
 @media (max-width:620px) { main { padding:20px 14px 45px; }.topbar { display:block; }.topbar .badge { display:inline-block; margin-top:13px; }.two-up { grid-template-columns:1fr; }.lifecycle { grid-template-columns:repeat(2,1fr); }.section-heading { flex-wrap:wrap; } }
 
+/* Visually hidden live region */
+.visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+/* Disabled states */
+button:disabled, input:disabled, textarea:disabled, select:disabled { opacity:.55; cursor:not-allowed; background:#f0f2ef; }
+.primary:disabled { background:#7a9e8e; }
+.anchor-search:disabled { background:#f0f2ef; }
+
+@media (prefers-reduced-motion:reduce) { .anchor-combobox.loading .anchor-search { animation:none; } }
+
 /* Anchor combobox */
 .anchor-combobox { position:relative; }
 .anchor-search { width:100%; }

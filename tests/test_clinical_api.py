@@ -358,3 +358,12 @@ class TestClinicalApi(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()), 1)
+
+    def test_workspace_includes_accessible_status_region(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="sr-status"', response.text)
+        self.assertIn('aria-live="polite"', response.text)
+        self.assertIn('id="submit-job"', response.text)
+        self.assertIn('aria-describedby="submit-status"', response.text)
