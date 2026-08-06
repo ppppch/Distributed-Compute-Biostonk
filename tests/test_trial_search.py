@@ -68,6 +68,27 @@ class TestTrialSearch(unittest.TestCase):
         self.assertEqual([result.nct_id for result in results], ["NCT002"])
         self.assertEqual(results[0].metadata["study_type"], "INTERVENTIONAL")
 
+    def test_returns_curated_anchor_trials(self):
+        anchors = self.search.anchor_trials(limit=10)
+
+        self.assertEqual([anchor["nct_id"] for anchor in anchors], ["NCT001", "NCT002", "NCT003"])
+        self.assertEqual(anchors[1]["metadata"]["conditions"], ["Rare disease"])
+
+    def test_filters_anchor_trials_by_query(self):
+        anchors = self.search.anchor_trials(query="NCT002")
+
+        self.assertEqual([anchor["nct_id"] for anchor in anchors], ["NCT002"])
+
+    def test_filters_anchor_trials_by_metadata_condition(self):
+        anchors = self.search.anchor_trials(query="rare disease")
+
+        self.assertEqual([anchor["nct_id"] for anchor in anchors], ["NCT002"])
+
+    def test_limits_anchor_trials(self):
+        anchors = self.search.anchor_trials(limit=1)
+
+        self.assertEqual(len(anchors), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

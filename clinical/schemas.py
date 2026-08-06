@@ -132,3 +132,16 @@ class ClinicalPredictionJobRequest(BaseModel):
     """A bounded simulated inference job for one or two protocol candidates."""
 
     candidates: list[PredictionCandidate] = Field(min_length=1, max_length=2)
+
+
+class CuratedAnchor(BaseModel):
+    """A searchable anchor trial from the imported embedding dataset."""
+
+    nct_id: str = Field(min_length=1)
+    source_workbook: str = Field(min_length=1)
+    metadata_available: bool
+    title: str | None = None
+    indication: str | None = None
+    phase: str | None = None
+    study_type: str | None = None
+    overall_status: str | None = None

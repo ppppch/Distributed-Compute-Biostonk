@@ -48,6 +48,60 @@ class TrialSearch:
         self._indices_by_nct_id: dict[str, list[int]] = {}
         for index, nct_id in enumerate(self._nct_ids):
             self._indices_by_nct_id.setdefault(nct_id, []).append(index)
+        self._anchor_index = self._build_anchor_index()
+
+    def _build_anchor_index(self) -> list[dict[str, object]]:
+        """Return one deduplicated entry per known NCT ID, enriched when metadata exists."""
+        seen: set[str] = set()
+        anchors: list[dict[str, object]] = []
+        for index, nct_id in enumerate(self._nct_ids):
+            if nct_id in seen:
+                continue
+            seen.add(nct_id)
+            metadata = self.metadata_for(nct_id)
+            anchors.append(
+                {
+                    "nct_id": nct_id,
+                    "source_workbook": self._sources[index],
+                    "metadata": metadata,
+                }
+            )
+        return anchors
+
+    def anchor_trials(self, query: str | None = None, limit: int = 20) -> list[dict[str, object]]:
+        """Return a curated, searchable list of anchor trials from the dataset."""
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        normalized_query = normalize(query) if query else ""
+        results: list[dict[str, object]] = []
+        for anchor in self._anchor_index:
+            if normalized_query and not self._anchor_matches(anchor, normalized_query):
+                continue
+            results.append(anchor)
+            if len(results) == limit:
+                break
+        return results
+
+    @staticmethod
+    def _anchor_matches(anchor: dict[str, object], query: str) -> bool:
+        if query in normalize(anchor["nct_id"]):
+            return True
+        metadata = anchor.get("metadata")
+        if not isinstance(metadata, dict):
+            return False
+        searchable = " ".join(
+            str(value)
+            for value in [
+                metadata.get("official_title"),
+                metadata.get("brief_title"),
+                *metadata.get("conditions", []),
+                *metadata.get("phases", []),
+                metadata.get("study_type"),
+                metadata.get("overall_status"),
+            ]
+            if value is not None
+        )
+        return query in normalize(searchable)
 
     def metadata_for(self, nct_id: str) -> dict | None:
         """Return imported structured metadata for a known Trial2Vec identifier."""

@@ -324,3 +324,37 @@ class TestClinicalApi(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
+
+    def test_returns_curated_anchor_trials(self):
+        response = self.client.get("/demo/anchors?limit=10")
+
+        self.assertEqual(response.status_code, 200)
+        anchors = response.json()
+        nct_ids = [anchor["nct_id"] for anchor in anchors]
+        self.assertIn("NCT001", nct_ids)
+        self.assertIn("NCT002", nct_ids)
+        by_id = {anchor["nct_id"]: anchor for anchor in anchors}
+        self.assertFalse(by_id["NCT001"]["metadata_available"])
+        self.assertIsNone(by_id["NCT001"]["title"])
+        self.assertTrue(by_id["NCT002"]["metadata_available"])
+        self.assertEqual(by_id["NCT002"]["title"], "Example study")
+        self.assertEqual(by_id["NCT002"]["indication"], "Rare disease")
+        self.assertEqual(by_id["NCT002"]["phase"], "PHASE2")
+
+    def test_filters_anchor_trials_by_nct_id(self):
+        response = self.client.get("/demo/anchors?query=NCT002")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([anchor["nct_id"] for anchor in response.json()], ["NCT002"])
+
+    def test_filters_anchor_trials_by_metadata(self):
+        response = self.client.get("/demo/anchors?query=rare%20disease")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([anchor["nct_id"] for anchor in response.json()], ["NCT002"])
+
+    def test_limits_anchor_trials(self):
+        response = self.client.get("/demo/anchors?limit=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)

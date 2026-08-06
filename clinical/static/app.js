@@ -20,7 +20,7 @@ async function analyzeDraft() {
   const draft = draftFromForm();
   if (!draft.protocol_text) return;
   byId("analysis-state").textContent = "Analyzing";
-  const response = await fetch("/protocol-drafts/analyze", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ draft, previous_draft: state.previousDraft }) });
+  const response = await fetch("/protocol-drafts/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft, previous_draft: state.previousDraft }) });
   if (!response.ok) return;
   const analysis = await response.json(); state.previousDraft = draft;
   const coverage = analysis.coverage;
@@ -35,7 +35,13 @@ async function submitJob(event) {
   event.preventDefault();
   const candidates = [candidateFromForm("candidate-a")];
   if (byId("compare-toggle").checked) candidates.push(candidateFromForm("candidate-b", "-b"));
-  const response = await fetch("/demo/prediction-jobs", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({candidates}) });
+  const missingAnchors = candidates.filter((c) => !c.anchor_nct_id);
+  if (missingAnchors.length > 0) {
+    byId("job-detail").textContent = "Please select a Trial2Vec anchor for every candidate.";
+    return;
+  }
+  byId("job-detail").textContent = "Submitting prediction job...";
+  const response = await fetch("/demo/prediction-jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidates }) });
   const job = await response.json();
   if (!response.ok) { byId("job-detail").textContent = job.detail || "Job could not be submitted."; return; }
   state.activeJob = job; lifecycle(job); byId("results").classList.add("hidden"); loadJobs();
@@ -44,7 +50,7 @@ async function submitJob(event) {
 }
 
 async function advanceJob() {
-  const response = await fetch(`/demo/prediction-jobs/${state.activeJob.job_id}/advance`, {method:"POST"});
+  const response = await fetch(`/demo/prediction-jobs/${state.activeJob.job_id}/advance`, { method: "POST" });
   state.activeJob = await response.json(); lifecycle(state.activeJob); loadDevices(); loadJobs();
   if (state.activeJob.status === "completed") { clearInterval(state.jobTimer); renderResults(state.activeJob.results); }
 }
@@ -64,7 +70,161 @@ async function loadDevices() {
   byId("devices-grid").innerHTML = devices.map((device) => `<article class="device"><h3>${device.name}</h3><p>${device.device_id} · ${device.type}</p><dl><dt>Approval</dt><dd>${device.approved ? "Approved" : "Not approved"}</dd><dt>Capacity</dt><dd>${device.cpu_cores} cores · ${device.memory_gb} GB</dd><dt>Availability</dt><dd class="availability ${device.availability}">${device.availability}</dd><dt>Assigned tasks</dt><dd>${device.assigned_tasks.length}</dd></dl></article>`).join("");
 }
 
-let debounce; byId("protocol-form").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(analyzeDraft, 600); });
+class AnchorCombobox {
+  constructor(containerId, hiddenInputId, initialNct) {
+    this.container = byId(containerId);
+    this.searchInput = this.container.querySelector(".anchor-search");
+    this.hiddenInput = byId(hiddenInputId);
+    this.listbox = this.container.querySelector(".anchor-list");
+    this.debounceTimer = null;
+    this.options = [];
+    this.activeIndex = -1;
+    this.selectedNct = initialNct || "";
+    if (this.selectedNct) {
+      this.hiddenInput.value = this.selectedNct;
+      this.searchInput.value = this.selectedNct;
+    }
+    this.searchInput.addEventListener("input", () => this.onInput());
+    this.searchInput.addEventListener("keydown", (event) => this.onKeyDown(event));
+    this.searchInput.addEventListener("blur", () => this.onBlur());
+    this.searchInput.addEventListener("focus", () => { if (this.searchInput.value.trim()) this.fetchAnchors(this.searchInput.value.trim()); });
+    this.listbox.addEventListener("mousedown", (event) => this.onOptionClick(event));
+  }
+
+  async onInput() {
+    const query = this.searchInput.value.trim();
+    this.hiddenInput.value = "";
+    this.selectedNct = "";
+    clearTimeout(this.debounceTimer);
+    this.setLoading(true);
+    this.debounceTimer = setTimeout(() => this.fetchAnchors(query), 200);
+  }
+
+  async fetchAnchors(query) {
+    const url = query ? `/demo/anchors?query=${encodeURIComponent(query)}&limit=20` : "/demo/anchors?limit=20";
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Anchor search failed");
+      const anchors = await response.json();
+      this.renderOptions(anchors);
+    } catch (error) {
+      this.renderOptions([]);
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  renderOptions(anchors) {
+    this.options = anchors;
+    this.activeIndex = -1;
+    if (anchors.length === 0) {
+      this.listbox.innerHTML = `<li class="anchor-empty" role="option" aria-selected="false">No matching anchor trials</li>`;
+      this.openListbox();
+      return;
+    }
+    this.listbox.innerHTML = anchors.map((anchor, index) => {
+      const metaParts = [
+        anchor.indication,
+        anchor.phase,
+        anchor.study_type,
+        anchor.overall_status,
+      ].filter(Boolean);
+      const metaText = metaParts.length ? ` · ${metaParts.join(" · ")}` : "";
+      const titleText = anchor.title ? ` — ${anchor.title}` : "";
+      const unavailable = anchor.metadata_available ? "" : " · metadata unavailable";
+      return `<li id="${this.optionId(index)}" role="option" aria-selected="false" data-index="${index}"><strong>${anchor.nct_id}</strong><span class="anchor-meta">${titleText}${metaText}${unavailable}</span></li>`;
+    }).join("");
+    this.openListbox();
+  }
+
+  optionId(index) { return `${this.container.id}-option-${index}`; }
+
+  openListbox() {
+    this.listbox.classList.add("open");
+    this.searchInput.setAttribute("aria-expanded", "true");
+  }
+
+  closeListbox() {
+    this.listbox.classList.remove("open");
+    this.searchInput.setAttribute("aria-expanded", "false");
+    this.searchInput.setAttribute("aria-activedescendant", "");
+    this.activeIndex = -1;
+  }
+
+  setLoading(isLoading) {
+    this.container.classList.toggle("loading", isLoading);
+    this.searchInput.setAttribute("aria-busy", isLoading ? "true" : "false");
+  }
+
+  onKeyDown(event) {
+    if (this.options.length === 0 && event.key !== "Escape") return;
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        this.moveActive(1);
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        this.moveActive(-1);
+        break;
+      case "Enter":
+        event.preventDefault();
+        if (this.activeIndex >= 0) {
+          this.selectOption(this.activeIndex);
+        }
+        break;
+      case "Escape":
+        this.closeListbox();
+        break;
+    }
+  }
+
+  moveActive(delta) {
+    if (this.options.length === 0) return;
+    this.activeIndex = (this.activeIndex + delta + this.options.length) % this.options.length;
+    this.updateActiveDescendant();
+  }
+
+  updateActiveDescendant() {
+    [...this.listbox.children].forEach((child, index) => {
+      const selected = index === this.activeIndex;
+      child.setAttribute("aria-selected", selected ? "true" : "false");
+      child.classList.toggle("active", selected);
+    });
+    if (this.activeIndex >= 0) {
+      this.searchInput.setAttribute("aria-activedescendant", this.optionId(this.activeIndex));
+      this.listbox.children[this.activeIndex].scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  onOptionClick(event) {
+    const option = event.target.closest("[data-index]");
+    if (!option) return;
+    this.selectOption(Number(option.dataset.index));
+  }
+
+  selectOption(index) {
+    const anchor = this.options[index];
+    if (!anchor) return;
+    this.selectedNct = anchor.nct_id;
+    this.hiddenInput.value = anchor.nct_id;
+    this.searchInput.value = anchor.nct_id;
+    this.closeListbox();
+    this.searchInput.setAttribute("aria-invalid", "false");
+  }
+
+  onBlur() {
+    setTimeout(() => {
+      this.closeListbox();
+      this.searchInput.setAttribute("aria-invalid", this.hiddenInput.value ? "false" : "true");
+    }, 150);
+  }
+}
+
+const anchorA = new AnchorCombobox("anchor-combobox-a", "anchor-nct", "NCT02545127");
+const anchorB = new AnchorCombobox("anchor-combobox-b", "anchor-nct-b", "NCT02545127");
+
+let debounce; byId("protocol-form").addEventListener("input", (event) => { if (event.target.classList.contains("anchor-search")) return; clearTimeout(debounce); debounce = setTimeout(analyzeDraft, 600); });
 byId("protocol-form").addEventListener("submit", submitJob);
 byId("compare-toggle").addEventListener("change", (event) => byId("candidate-b").classList.toggle("hidden", !event.target.checked));
 byId("protocol-file").addEventListener("change", async (event) => { const file = event.target.files[0]; if (file) byId("protocol-text").value = await file.text(); analyzeDraft(); });

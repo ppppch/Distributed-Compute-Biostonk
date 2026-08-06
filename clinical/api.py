@@ -19,6 +19,7 @@ from clinical.schemas import (
     ClaimVerificationRequest,
     ClinicalPredictionJobRequest,
     ComparableProgramRequest,
+    CuratedAnchor,
     ProtocolDraftAnalysisRequest,
     ReviewableBriefRequest,
 )
@@ -163,6 +164,27 @@ def create_app(
     @app.get("/demo/devices")
     def demo_devices() -> list[dict]:
         return demo_jobs.devices()
+
+    @app.get("/demo/anchors", response_model=list[CuratedAnchor])
+    def demo_anchors(
+        query: str | None = Query(default=None, min_length=1),
+        limit: int = Query(default=20, ge=1, le=100),
+    ) -> list[CuratedAnchor]:
+        anchors = search.anchor_trials(query=query, limit=limit)
+        return [_curated_anchor_response(anchor) for anchor in anchors]
+
+    def _curated_anchor_response(anchor: dict[str, object]) -> CuratedAnchor:
+        metadata = anchor["metadata"] if isinstance(anchor["metadata"], dict) else None
+        return CuratedAnchor(
+            nct_id=anchor["nct_id"],
+            source_workbook=anchor["source_workbook"],
+            metadata_available=bool(metadata),
+            title=metadata.get("official_title") if metadata else None,
+            indication=metadata.get("conditions", [None])[0] if metadata and metadata.get("conditions") else None,
+            phase=metadata.get("phases", [None])[0] if metadata and metadata.get("phases") else None,
+            study_type=metadata.get("study_type") if metadata else None,
+            overall_status=metadata.get("overall_status") if metadata else None,
+        )
 
     @app.get("/demo/prediction-jobs/history", response_model=list[DemoPredictionJobResponse])
     def list_demo_prediction_jobs() -> list[DemoPredictionJobResponse]:
