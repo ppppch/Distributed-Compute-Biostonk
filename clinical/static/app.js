@@ -1,4 +1,4 @@
-const state = { previousDraft: null, activeJob: null, jobTimer: null };
+const state = { previousDraft: null, activeJob: null, jobTimer: null, lastAnnouncedStatus: null };
 const byId = (id) => document.getElementById(id);
 
 function draftFromForm(suffix = "") {
@@ -20,16 +20,35 @@ async function analyzeDraft() {
   const draft = draftFromForm();
   if (!draft.protocol_text) return;
   byId("analysis-state").textContent = "Analyzing";
+  byId("coverage-output").setAttribute("aria-busy", "true");
+  announce("Analyzing protocol draft coverage.");
   const response = await fetch("/protocol-drafts/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft, previous_draft: state.previousDraft }) });
-  if (!response.ok) return;
+  if (!response.ok) {
+    byId("analysis-state").textContent = "Error";
+    byId("coverage-output").setAttribute("aria-busy", "false");
+    announce("Protocol analysis failed.");
+    return;
+  }
   const analysis = await response.json(); state.previousDraft = draft;
   const coverage = analysis.coverage;
   byId("analysis-state").textContent = "Live";
   byId("coverage-output").innerHTML = `<strong>${coverage.provided_design_field_count}/${coverage.required_design_field_count} design fields supplied</strong><p>Missing design fields</p><ul>${coverage.missing_design_fields.map(label).join("") || "<li>None</li>"}</ul><p>Missing operational fields</p><ul>${coverage.missing_operational_fields.map(label).join("") || "<li>None</li>"}</ul>`;
+  byId("coverage-output").setAttribute("aria-busy", "false");
+  const missingCount = coverage.missing_design_fields.length + coverage.missing_operational_fields.length;
+  announce(`Protocol coverage updated. ${missingCount === 0 ? "All fields supplied." : `${missingCount} fields missing.`}`);
 }
 
 function label(value) { return `<li>${value.replaceAll("_", " ")}</li>`; }
-function lifecycle(job) { byId("job-id").textContent = job.job_id; byId("job-detail").textContent = job.execution_notice; const index = job.lifecycle.indexOf(job.status); [...byId("lifecycle").children].forEach((item, i) => { item.className = i === index ? "current" : i < index ? "active" : ""; }); }
+function lifecycle(job) {
+  byId("job-id").textContent = job.job_id;
+  byId("job-detail").textContent = job.execution_notice;
+  const index = job.lifecycle.indexOf(job.status);
+  [...byId("lifecycle").children].forEach((item, i) => { item.className = i === index ? "current" : i < index ? "active" : ""; });
+  if (state.lastAnnouncedStatus !== job.status) {
+    state.lastAnnouncedStatus = job.status;
+    announce(`Job ${job.job_id}: ${job.status}.`);
+  }
+}
 
 function announce(message) {
   const region = byId("sr-status");
@@ -66,10 +85,12 @@ async function submitJob(event) {
   }
   setFormDisabled(true, "Submitting prediction job. Please wait.");
   byId("job-detail").textContent = "Submitting prediction job...";
+  byId("jobs").setAttribute("aria-busy", "true");
   const response = await fetch("/demo/prediction-jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidates }) });
   const job = await response.json();
   if (!response.ok) {
     setFormDisabled(false);
+    byId("jobs").setAttribute("aria-busy", "false");
     byId("job-detail").textContent = job.detail || "Job could not be submitted.";
     return;
   }
@@ -85,6 +106,8 @@ async function advanceJob() {
     clearInterval(state.jobTimer);
     renderResults(state.activeJob.results);
     setFormDisabled(false);
+    byId("jobs").setAttribute("aria-busy", "false");
+    state.lastAnnouncedStatus = null;
     announce("Prediction job completed. Form controls are available.");
   }
 }
@@ -136,6 +159,7 @@ class AnchorCombobox {
 
   async fetchAnchors(query) {
     const url = query ? `/demo/anchors?query=${encodeURIComponent(query)}&limit=20` : "/demo/anchors?limit=20";
+    if (query) announce("Loading anchor trials.");
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error("Anchor search failed");
@@ -143,6 +167,7 @@ class AnchorCombobox {
       this.renderOptions(anchors);
     } catch (error) {
       this.renderOptions([]);
+      announce("Anchor search failed.");
     } finally {
       this.setLoading(false);
     }
