@@ -1,12 +1,14 @@
 # BioStonk Clinical Compute
 
-BioStonk is a local demonstration of a distributed clinical AI compute platform
-for CROs and pharmaceutical teams. A user can paste or upload a clinical-trial
-protocol, select a historical Trial2Vec anchor, submit one or two protocol
-candidates, watch a simulated distributed inference lifecycle, and inspect an
-experimental score with comparable historical trials.
+BioStonk is a local clinical-trial comparison workspace for CROs and
+pharmaceutical teams. A user can paste or upload a clinical-trial protocol,
+select a historical Trial2Vec anchor, compare one or two protocol candidates,
+and inspect measured cosine similarity with comparable historical trials.
 
 The browser workspace is served by FastAPI at `http://127.0.0.1:8001`.
+
+For a real two-laptop pre-production test, follow
+[TWO_LAPTOP_PILOT.md](TWO_LAPTOP_PILOT.md).
 
 ## Demo Workflow
 
@@ -14,14 +16,14 @@ The browser workspace is served by FastAPI at `http://127.0.0.1:8001`.
 2. Complete the structured design and operational fields.
 3. Select a known NCT ID whose Trial2Vec embedding is in the local dataset.
 4. Optionally add a second candidate for comparison.
-5. Submit the job and watch it move through:
+5. Run the comparison and watch the worker-driven lifecycle move through:
 
   ```text
-  submitted -> sharded -> distributed -> running -> verified -> aggregated -> completed
+  queued -> running -> verifying -> aggregated -> completed
   ```
 
-6. Review the experimental estimate, factor values, risk indicators, five real
-  Trial2Vec nearest neighbors, mock devices, task assignments, and job history.
+6. Review top and mean similarity, metadata and protocol coverage, five real
+  Trial2Vec nearest neighbors, allowlisted worker processes, and comparison history.
 
 ## What Is Real and What Is Simulated
 
@@ -29,21 +31,23 @@ The browser workspace is served by FastAPI at `http://127.0.0.1:8001`.
 
 - Trial2Vec clinical-trial embeddings from the tracked Emde workbooks.
 - Cosine-similarity ranking over the imported embeddings.
+- Top and mean neighbor similarity amounts derived directly from that ranking.
 - Imported ClinicalTrials.gov metadata when present.
 - Source identifiers, URLs, timestamps, and content hashes.
 - Protocol completeness checks and deterministic draft hashes.
+- Approved-worker registration, heartbeat, and pull-based task leasing.
+- Replicated execution on distinct workers and canonical output hashing.
+- Aggregation only after independent replica checksums agree.
 
-**Simulated for the demo:**
+The local demo runs two worker processes on one computer. The same worker accepts
+a remote coordinator URL for a two-computer LAN run. Certificate-backed device
+identity, sandboxing, and hardware attestation remain production hardening work.
 
-- Device enrollment, hardware telemetry, sharding, and endpoint execution.
-- Task verification and aggregation lifecycle transitions.
-- The numeric experimental estimate and any compute-cost assumptions.
-
-The score is labeled **Experimental demo estimate (not a validated clinical
-prediction)**. It is a transparent heuristic combining Trial2Vec similarity with
-available status, phase, enrollment, intervention-type, and protocol-coverage
-signals. It is not a probability of success and must not be used as clinical,
-operational, regulatory, or investment advice.
+The displayed percentage is the cosine similarity between the selected known
+Trial2Vec anchor and its closest stored neighbor. It is a measured representation
+distance, not a probability of success, clinical outcome forecast, or advice.
+Uploaded protocol content is used transiently for coverage analysis and is not
+persisted or used for online training.
 
 The current Emde labels are sentiment labels, not historical trial outcomes. A
 validated prediction model would require approved outcome labels, calibration,
@@ -75,7 +79,15 @@ the demo, not during a live presentation.
 Run the application:
 
 ```bash
-venv/bin/python -m uvicorn clinical.api:app --host 127.0.0.1 --port 8001
+# Terminal 1
+BIOSTONK_APPROVED_WORKERS=local-worker-a,local-worker-b \
+  venv/bin/python -m uvicorn clinical.api:app --host 127.0.0.1 --port 8001
+
+# Terminal 2
+WORKER_ID=local-worker-a venv/bin/python -m client.clinical_worker
+
+# Terminal 3
+WORKER_ID=local-worker-b venv/bin/python -m client.clinical_worker
 ```
 
 Open [http://127.0.0.1:8001](http://127.0.0.1:8001). The API schema is available
@@ -98,7 +110,9 @@ customer documents.
 | `clinical/static/` | Protocol workspace, jobs, results, comparison, and devices UI |
 | `clinical/api.py` | FastAPI application and demo endpoints |
 | `clinical/trial_search.py` | Trial2Vec cosine-similarity retrieval |
-| `clinical/demo_jobs.py` | In-memory simulated job coordinator and experimental score |
+| `clinical/demo_jobs.py` | Deterministic comparison workload implementation |
+| `clinical/distributed_compute.py` | Worker approval, leases, replica verification, and aggregation |
+| `client/clinical_worker.py` | Pull-based allowlisted worker process |
 | `clinical/protocol_analysis.py` | Draft coverage, hashing, and change signals |
 | `clinical/import_trials.py` | Emde workbook to local compressed embedding dataset |
 | `clinical/fetch_metadata.py` | Bounded ClinicalTrials.gov v2 cohort fetch |
@@ -108,15 +122,19 @@ customer documents.
 Detailed clinical commands and API behavior are documented in
 [clinical/README.md](clinical/README.md).
 
-## Demo API
+## Comparison API
 
 | Method and path | Purpose |
 |---|---|
 | `POST /protocol-drafts/analyze` | Analyze draft coverage and changes without a validated prediction |
-| `POST /demo/prediction-jobs` | Submit one or two protocol candidates |
-| `POST /demo/prediction-jobs/{job_id}/advance` | Advance one simulated lifecycle stage |
-| `GET /demo/prediction-jobs/history` | List local submitted, active, and completed jobs |
-| `GET /demo/devices` | List approved mock devices and assigned tasks |
+| `POST /comparison-jobs` | Queue replicated comparison tasks |
+| `GET /comparison-jobs/{job_id}` | Poll worker-driven job state and verified results |
+| `GET /comparison-jobs/history` | List local active and completed comparisons |
+| `POST /compute/workers/register` | Register an allowlisted worker process and artifact capabilities |
+| `GET /compute/readiness` | Report single-host or strict two-host pilot readiness |
+| `POST /compute/workers/{worker_id}/next-task` | Pull the next eligible task replica |
+| `POST /compute/workers/{worker_id}/results` | Submit a hashed worker result |
+| `GET /demo/devices` | List approved endpoints with live connectivity and task assignment |
 | `GET /trials/{nct_id}/comparables` | Retrieve real Trial2Vec nearest neighbors |
 
 ## Firebase

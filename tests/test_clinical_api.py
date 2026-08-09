@@ -8,6 +8,9 @@ import numpy as np
 from fastapi.testclient import TestClient
 
 from clinical.api import create_app
+from clinical.demo_jobs import build_candidate_comparison
+from clinical.distributed_compute import canonical_checksum
+from clinical.schemas import PredictionCandidate
 
 
 class TestClinicalApi(unittest.TestCase):
@@ -32,7 +35,15 @@ class TestClinicalApi(unittest.TestCase):
             label_names=np.array(["0.0", "1.0"]),
             source_workbook=np.array(["a.xlsx", "b.xlsx"]),
         )
-        self.client = TestClient(create_app(dataset_path, source_directory, metadata_path, review_store_path))
+        self.client = TestClient(
+            create_app(
+                dataset_path,
+                source_directory,
+                metadata_path,
+                review_store_path,
+                approved_worker_ids={"worker-a", "worker-b"},
+            )
+        )
 
     def test_returns_comparable_trials(self):
         response = self.client.get("/trials/NCT001/comparables?limit=1")
@@ -49,7 +60,48 @@ class TestClinicalApi(unittest.TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Protocol prediction workspace", response.text)
+        self.assertIn("Protocol comparison workspace", response.text)
+        self.assertIn("Model Explainability Gallery", response.text)
+        self.assertIn("Current boundary", response.text)
+
+    def test_reports_single_host_development_readiness(self):
+        response = self.client.get("/compute/readiness")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["mode"], "single-host-development")
+        self.assertFalse(response.json()["production_ready"])
+        self.assertFalse(response.json()["ready"])
+
+    def test_devices_lists_approved_endpoints_before_and_after_connection(self):
+        devices = self.client.get("/demo/devices").json()
+        by_id = {device["device_id"]: device for device in devices}
+
+        self.assertEqual(set(by_id), {"worker-a", "worker-b"})
+        self.assertTrue(all(not device["connected"] for device in devices))
+        self.assertTrue(all(device["availability"] == "not connected" for device in devices))
+        self.assertEqual(by_id["worker-a"]["assigned_tasks"], [])
+
+        registered = self.client.post(
+            "/compute/workers/register",
+            json={
+                "worker_id": "worker-a",
+                "hostname": "worker-a.local",
+                "platform": "test-platform",
+                "capabilities": {
+                    "workload_versions": ["trial2vec-comparison-v1"],
+                    "artifact_checksum": self.client.app.state.compute_coordinator.artifact_checksum,
+                },
+            },
+        )
+        self.assertEqual(registered.status_code, 200)
+
+        devices = self.client.get("/demo/devices").json()
+        by_id = {device["device_id"]: device for device in devices}
+        self.assertTrue(by_id["worker-a"]["connected"])
+        self.assertEqual(by_id["worker-a"]["availability"], "available")
+        self.assertEqual(by_id["worker-a"]["name"], "worker-a.local")
+        self.assertFalse(by_id["worker-b"]["connected"])
+        self.assertEqual(by_id["worker-b"]["availability"], "not connected")
 
     def test_applies_metadata_filters(self):
         response = self.client.get("/trials/NCT001/comparables?condition=rare%20disease&phase=phase%202")
@@ -210,9 +262,23 @@ class TestClinicalApi(unittest.TestCase):
         self.assertIn("planned_enrollment", response.json()["change_signals"]["added_fields"])
         self.assertNotIn("probability", response.json()["prediction"])
 
-    def test_runs_simulated_trial2vec_prediction_job_to_completion(self):
+    def test_runs_verified_trial2vec_comparison_on_two_workers(self):
+        for worker_id in ("worker-a", "worker-b"):
+            registered = self.client.post(
+                "/compute/workers/register",
+                json={
+                    "worker_id": worker_id,
+                    "hostname": f"{worker_id}.local",
+                    "platform": "test-platform",
+                    "capabilities": {
+                        "workload_versions": ["trial2vec-comparison-v1"],
+                        "artifact_checksum": self.client.app.state.compute_coordinator.artifact_checksum,
+                    },
+                },
+            )
+            self.assertEqual(registered.status_code, 200)
         created = self.client.post(
-            "/demo/prediction-jobs",
+            "/comparison-jobs",
             json={
                 "candidates": [
                     {
@@ -236,28 +302,49 @@ class TestClinicalApi(unittest.TestCase):
         )
 
         self.assertEqual(created.status_code, 200)
-        self.assertEqual(created.json()["status"], "submitted")
-        self.assertTrue(created.json()["simulation"])
-        self.assertEqual(created.json()["results"][0]["similar_historical_trials"][0]["nct_id"], "NCT002")
-        self.assertIn("not a validated", created.json()["results"][0]["score_label"])
-        self.assertGreater(created.json()["results"][0]["experimental_demo_estimate"], 50)
+        self.assertEqual(created.json()["status"], "queued")
+        self.assertFalse(created.json()["simulation"])
+        self.assertEqual(created.json()["results"], [])
+        self.assertEqual(len(created.json()["tasks"]), 2)
 
-        jobs = self.client.get("/demo/prediction-jobs/history")
+        claims = [
+            self.client.post(f"/compute/workers/{worker_id}/next-task").json()
+            for worker_id in ("worker-a", "worker-b")
+        ]
+        for worker_id, claim in zip(("worker-a", "worker-b"), claims):
+            result = build_candidate_comparison(
+                PredictionCandidate.model_validate(claim["candidate"]),
+                self.client.app.state.trial_search,
+            )
+            submitted = self.client.post(
+                f"/compute/workers/{worker_id}/results",
+                json={
+                    "job_id": claim["job_id"],
+                    "task_id": claim["task_id"],
+                    "worker_id": worker_id,
+                    "result": result,
+                    "checksum": canonical_checksum(result),
+                    "duration_seconds": 0.01,
+                    "success": True,
+                },
+            )
+            self.assertEqual(submitted.status_code, 200)
+
+        completed = self.client.get(f"/comparison-jobs/{created.json()['job_id']}")
+        self.assertEqual(completed.json()["status"], "completed")
+        self.assertEqual(completed.json()["results"][0]["similar_historical_trials"][0]["nct_id"], "NCT002")
+        self.assertGreater(completed.json()["results"][0]["top_match_similarity"], 90)
+        self.assertEqual(completed.json()["verification"]["verified_task_count"], 2)
+
+        jobs = self.client.get("/comparison-jobs/history")
         self.assertEqual(jobs.status_code, 200)
         self.assertEqual(jobs.json()[0]["job_id"], created.json()["job_id"])
-        self.assertEqual(jobs.json()[0]["status"], "submitted")
-
-        job_id = created.json()["job_id"]
-        for _ in range(6):
-            completed = self.client.post(f"/demo/prediction-jobs/{job_id}/advance")
-
-        self.assertEqual(completed.status_code, 200)
-        self.assertEqual(completed.json()["status"], "completed")
-        self.assertEqual(completed.json()["tasks"][0]["status"], "completed")
+        self.assertEqual(jobs.json()[0]["status"], "completed")
 
         devices = self.client.get("/demo/devices")
         self.assertEqual(devices.status_code, 200)
-        self.assertTrue(devices.json()[0]["approved"])
+        self.assertEqual(len(devices.json()), 2)
+        self.assertTrue(devices.json()[0]["allowlisted"])
 
     def test_approves_and_finalizes_reviewable_brief(self):
         created = self.client.post("/reviewable-briefs", json=self.reviewable_brief_request()).json()
