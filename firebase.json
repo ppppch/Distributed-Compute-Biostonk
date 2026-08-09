@@ -1,0 +1,42 @@
+{
+  "hosting": {
+    "site": "biostonk",
+    "public": "clinical",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "**/*.py",
+      "**/*.npz",
+      "**/*.json",
+      "**/*.md",
+      "**/__pycache__/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/",
+        "destination": "/static/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/static/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(js|css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public,max-age=300"
+          }
+        ]
+      }
+    ]
+  }
+}

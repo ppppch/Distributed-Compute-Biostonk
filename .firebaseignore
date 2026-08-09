@@ -1,0 +1,9 @@
+.git
+.github
+.gitignore
+**/node_modules/**
+**/__pycache__/**
+**/*.py
+**/*.npz
+**/*.json
+**/*.md
