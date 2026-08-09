@@ -1,16 +1,25 @@
 """Phase 1 API for clinical-trial evidence retrieval."""
 
+import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from clinical.claim_verifier import verify_claim
 from clinical.evidence_catalog import EvidenceCatalog
 from clinical.evidence_brief import build_evidence_brief
-from clinical.demo_jobs import DemoJobCoordinator
+from clinical.distributed_compute import (
+    ClinicalComputeCoordinator,
+    ComputeCoordinatorError,
+    TaskConflictError,
+    TaskValidationError,
+    UnknownComputeResourceError,
+    WorkerApprovalError,
+    comparison_artifact_checksum,
+)
 from clinical.metadata_catalog import TrialMetadataCatalog
 from clinical.protocol_analysis import analyze_protocol_draft
 from clinical.review_ledger import ReviewLedger
@@ -18,7 +27,9 @@ from clinical.schemas import (
     ClaimReviewRequest,
     ClaimVerificationRequest,
     ClinicalPredictionJobRequest,
+    ComparisonTaskResultRequest,
     ComparableProgramRequest,
+    ComputeWorkerRegistrationRequest,
     ProtocolDraftAnalysisRequest,
     ReviewableBriefRequest,
 )
@@ -90,7 +101,7 @@ class ProtocolDraftAnalysisResponse(BaseModel):
     limitations: list[str]
 
 
-class DemoPredictionJobResponse(BaseModel):
+class ComparisonJobResponse(BaseModel):
     job_id: str
     status: str
     lifecycle: list[str]
@@ -100,6 +111,10 @@ class DemoPredictionJobResponse(BaseModel):
     execution_notice: str
     tasks: list[dict]
     results: list[dict]
+    completed_at: str | None
+    verification: dict | None
+    errors: list[str]
+    status_history: list[dict]
 
 
 def create_app(
@@ -107,6 +122,8 @@ def create_app(
     source_directory: Path = Path("clinical/data/Emde"),
     metadata_path: Path = Path("clinical/data/trial_metadata.json"),
     review_store_path: Path = Path("clinical/data/reviewed_briefs.json"),
+    approved_worker_ids: set[str] | None = None,
+    require_distinct_hosts: bool | None = None,
 ) -> FastAPI:
     app = FastAPI(title="BioStonk Clinical Evidence API")
     static_directory = Path(__file__).parent / "static"
@@ -115,7 +132,45 @@ def create_app(
     metadata_catalog = TrialMetadataCatalog(metadata_path) if metadata_path.exists() else None
     search = TrialSearch(dataset_path, catalog.source_records(), metadata_catalog)
     review_ledger = ReviewLedger(review_store_path)
-    demo_jobs = DemoJobCoordinator(search)
+    configured_worker_ids = approved_worker_ids or {
+        worker_id.strip()
+        for worker_id in os.getenv(
+            "BIOSTONK_APPROVED_WORKERS",
+            "local-worker-a,local-worker-b",
+        ).split(",")
+        if worker_id.strip()
+    }
+    compute = ClinicalComputeCoordinator(
+        artifact_checksum=comparison_artifact_checksum(dataset_path, source_directory, metadata_path),
+        approved_worker_ids=configured_worker_ids,
+        require_distinct_hosts=(
+            require_distinct_hosts
+            if require_distinct_hosts is not None
+            else os.getenv("BIOSTONK_REQUIRE_DISTINCT_HOSTS", "false").casefold() in {"1", "true", "yes"}
+        ),
+    )
+    app.state.compute_coordinator = compute
+    app.state.trial_search = search
+
+    @app.exception_handler(UnknownComputeResourceError)
+    async def unknown_compute_resource(_, error: UnknownComputeResourceError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(error)})
+
+    @app.exception_handler(WorkerApprovalError)
+    async def worker_approval_failure(_, error: WorkerApprovalError) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(error)})
+
+    @app.exception_handler(TaskConflictError)
+    async def task_conflict(_, error: TaskConflictError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(TaskValidationError)
+    async def task_validation_failure(_, error: TaskValidationError) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(error)})
+
+    @app.exception_handler(ComputeCoordinatorError)
+    async def compute_failure(_, error: ComputeCoordinatorError) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(error)})
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -160,34 +215,62 @@ def create_app(
     def analyze_protocol(request: ProtocolDraftAnalysisRequest) -> ProtocolDraftAnalysisResponse:
         return ProtocolDraftAnalysisResponse(**analyze_protocol_draft(request))
 
+    @app.post("/compute/workers/register")
+    def register_compute_worker(request: ComputeWorkerRegistrationRequest) -> dict:
+        return compute.register_worker(request)
+
+    @app.get("/compute/workers")
+    def list_compute_workers() -> list[dict]:
+        return compute.list_workers()
+
+    @app.get("/compute/readiness")
+    def compute_readiness() -> dict:
+        return compute.readiness()
+
+    @app.post("/compute/workers/{worker_id}/heartbeat")
+    def heartbeat_compute_worker(worker_id: str) -> dict:
+        return compute.heartbeat(worker_id)
+
+    @app.post(
+        "/compute/workers/{worker_id}/next-task",
+        response_model=None,
+        responses={204: {"description": "No comparison task is currently available"}},
+    )
+    def claim_compute_task(worker_id: str) -> dict | Response:
+        task = compute.claim_next_task(worker_id)
+        return Response(status_code=204) if task is None else task
+
+    @app.post("/compute/workers/{worker_id}/results")
+    def submit_compute_result(worker_id: str, request: ComparisonTaskResultRequest) -> dict:
+        duplicate, job = compute.submit_result(worker_id, request)
+        return {"accepted": True, "duplicate": duplicate, "job": job}
+
     @app.get("/demo/devices")
     def demo_devices() -> list[dict]:
-        return demo_jobs.devices()
+        return compute.devices()
 
-    @app.get("/demo/prediction-jobs/history", response_model=list[DemoPredictionJobResponse])
-    def list_demo_prediction_jobs() -> list[DemoPredictionJobResponse]:
-        return [DemoPredictionJobResponse(**job) for job in demo_jobs.list_jobs()]
+    @app.get("/comparison-jobs/history", response_model=list[ComparisonJobResponse])
+    @app.get("/demo/prediction-jobs/history", response_model=list[ComparisonJobResponse], include_in_schema=False)
+    def list_comparison_jobs() -> list[ComparisonJobResponse]:
+        return [ComparisonJobResponse(**job) for job in compute.list_jobs()]
 
-    @app.post("/demo/prediction-jobs", response_model=DemoPredictionJobResponse)
-    def submit_demo_prediction_job(request: ClinicalPredictionJobRequest) -> DemoPredictionJobResponse:
-        try:
-            return DemoPredictionJobResponse(**demo_jobs.submit(request))
-        except KeyError as error:
-            raise HTTPException(status_code=404, detail=str(error)) from error
+    @app.post("/comparison-jobs", response_model=ComparisonJobResponse)
+    @app.post("/demo/prediction-jobs", response_model=ComparisonJobResponse, include_in_schema=False)
+    def submit_comparison_job(request: ClinicalPredictionJobRequest) -> ComparisonJobResponse:
+        readiness = compute.readiness()
+        if not readiness["ready"]:
+            raise HTTPException(status_code=409, detail=" ".join(readiness["blockers"]))
+        return ComparisonJobResponse(**compute.submit_job(request))
 
-    @app.get("/demo/prediction-jobs/{job_id}", response_model=DemoPredictionJobResponse)
-    def get_demo_prediction_job(job_id: str) -> DemoPredictionJobResponse:
-        try:
-            return DemoPredictionJobResponse(**demo_jobs.get(job_id))
-        except KeyError as error:
-            raise HTTPException(status_code=404, detail=str(error)) from error
+    @app.get("/comparison-jobs/{job_id}", response_model=ComparisonJobResponse)
+    @app.get("/demo/prediction-jobs/{job_id}", response_model=ComparisonJobResponse, include_in_schema=False)
+    def get_comparison_job(job_id: str) -> ComparisonJobResponse:
+        return ComparisonJobResponse(**compute.get_job(job_id))
 
-    @app.post("/demo/prediction-jobs/{job_id}/advance", response_model=DemoPredictionJobResponse)
-    def advance_demo_prediction_job(job_id: str) -> DemoPredictionJobResponse:
-        try:
-            return DemoPredictionJobResponse(**demo_jobs.advance(job_id))
-        except KeyError as error:
-            raise HTTPException(status_code=404, detail=str(error)) from error
+    @app.post("/comparison-jobs/{job_id}/advance", response_model=ComparisonJobResponse, include_in_schema=False)
+    @app.post("/demo/prediction-jobs/{job_id}/advance", response_model=ComparisonJobResponse, include_in_schema=False)
+    def legacy_poll_comparison_job(job_id: str) -> ComparisonJobResponse:
+        return get_comparison_job(job_id)
 
     @app.post("/reviewable-briefs", response_model=ReviewableBriefResponse)
     def create_reviewable_brief(request: ReviewableBriefRequest) -> ReviewableBriefResponse:

@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -121,7 +121,7 @@ class ProtocolDraftAnalysisRequest(BaseModel):
 
 
 class PredictionCandidate(BaseModel):
-    """A protocol candidate paired with a selected Trial2Vec anchor trial."""
+    """A protocol candidate paired with a selected Trial2Vec comparison anchor."""
 
     candidate_id: str = Field(min_length=1)
     anchor_nct_id: str = Field(min_length=1)
@@ -129,6 +129,28 @@ class PredictionCandidate(BaseModel):
 
 
 class ClinicalPredictionJobRequest(BaseModel):
-    """A bounded simulated inference job for one or two protocol candidates."""
+    """A bounded local comparison request for one or two protocol candidates."""
 
     candidates: list[PredictionCandidate] = Field(min_length=1, max_length=2)
+
+
+class ComputeWorkerRegistrationRequest(BaseModel):
+    """Identity and immutable workload capabilities presented by a worker."""
+
+    worker_id: str = Field(min_length=1, max_length=100)
+    hostname: str = Field(min_length=1, max_length=255)
+    platform: str = Field(min_length=1, max_length=255)
+    capabilities: dict[str, Any] = Field(default_factory=dict)
+
+
+class ComparisonTaskResultRequest(BaseModel):
+    """One worker's deterministic result for a leased comparison replica."""
+
+    job_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    worker_id: str = Field(min_length=1)
+    result: dict[str, Any] | None = None
+    checksum: str = ""
+    duration_seconds: float = Field(ge=0)
+    success: bool
+    error: str | None = None

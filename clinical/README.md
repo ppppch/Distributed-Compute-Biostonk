@@ -89,7 +89,7 @@ operational fields, and a field-level change list. It explicitly returns
 `prediction.available: false`: the current sentiment-labeled embeddings cannot
 support a calibrated trial probability-of-success model.
 
-## Distributed Prediction Demo
+## Local Trial Comparison
 
 The workspace at `/` is a local CRO/pharma demonstration. Users paste or upload
 a protocol, choose a known Trial2Vec NCT ID as the retrieval anchor, and submit
@@ -97,24 +97,41 @@ one or two candidates for comparison. The selected anchor is required because
 this repository has Trial2Vec embeddings for historical trials but no protocol
 text embedding model.
 
-`POST /demo/prediction-jobs` creates an in-memory simulated workflow:
+`POST /comparison-jobs` creates two replicas per candidate. Distinct approved
+workers pull replicas, execute them against matching local Trial2Vec artifacts,
+and submit canonical result hashes:
 
 ```text
-submitted -> sharded -> distributed -> running -> verified -> aggregated -> completed
+queued -> running -> verifying -> aggregated -> completed
 ```
 
-`POST /demo/prediction-jobs/{job_id}/advance` advances one lifecycle stage and
-`GET /demo/prediction-jobs/history` lists submitted, running, and completed local
-demo jobs. `GET /demo/devices` lists approved mock employee workstations and their
-simulated capacity, availability, and assigned tasks. No endpoint device executes
-data, and no job data is stored remotely.
+`GET /comparison-jobs/{job_id}` polls worker-driven state and
+`GET /comparison-jobs/history` lists active and completed comparisons.
+Workers register at `POST /compute/workers/register`, pull from
+`POST /compute/workers/{worker_id}/next-task`, and submit to
+`POST /compute/workers/{worker_id}/results`. Aggregation occurs only when replica
+payload hashes agree and the replicas were processed by distinct workers.
 
-Each completed result includes real Trial2Vec nearest-neighbor retrieval and an
-`experimental_demo_estimate` from a visible heuristic. The heuristic combines
-similarity with available imported ClinicalTrials.gov status, phase, enrollment,
-and intervention-type metadata. This is not a probability of success, a
-validated clinical prediction, clinical advice, operational advice, or
-regulatory advice.
+Run the coordinator and two local worker processes in separate terminals:
+
+```bash
+make clinical-server
+make clinical-worker-a
+make clinical-worker-b
+```
+
+For a two-laptop pilot, follow [the LAN runbook](../TWO_LAPTOP_PILOT.md). Strict
+mode requires `BIOSTONK_REQUIRE_DISTINCT_HOSTS=true` and blocks work until two
+allowlisted workers on distinct hostnames report the same full artifact bundle
+checksum. This is process allowlisting, not production hardware identity.
+
+Each completed result includes real Trial2Vec nearest-neighbor retrieval,
+`top_match_similarity`, `mean_match_similarity`, metadata coverage, and protocol
+field coverage. Similarity values are direct cosine measurements against the
+selected known anchor. They are not probabilities of success, validated clinical
+predictions, clinical advice, operational advice, or regulatory advice. Uploaded
+protocol content remains in coordinator/worker memory only and is not used for
+online training.
 
 ## Local Evidence Brief
 

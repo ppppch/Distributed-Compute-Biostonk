@@ -38,6 +38,26 @@ legacy-workers:
 test:
 	python3 -m unittest discover -s tests -v
 
+# --- Verified clinical compute (run each target in its own terminal) ---
+
+clinical-server:
+	BIOSTONK_APPROVED_WORKERS=local-worker-a,local-worker-b python3 -m uvicorn clinical.api:app --host 127.0.0.1 --port 8001
+
+clinical-worker-a:
+	WORKER_ID=local-worker-a COORDINATOR_URL=http://127.0.0.1:8001 python3 -m client.clinical_worker
+
+clinical-worker-b:
+	WORKER_ID=local-worker-b COORDINATOR_URL=http://127.0.0.1:8001 python3 -m client.clinical_worker
+
+clinical-lan-server:
+	BIOSTONK_APPROVED_WORKERS=laptop-a,laptop-b BIOSTONK_REQUIRE_DISTINCT_HOSTS=true python3 -m uvicorn clinical.api:app --host 0.0.0.0 --port 8001
+
+clinical-lan-worker-a:
+	WORKER_ID=laptop-a COORDINATOR_URL=$${COORDINATOR_URL:-http://127.0.0.1:8001} python3 -m client.clinical_worker
+
+clinical-lan-worker-b:
+	WORKER_ID=laptop-b COORDINATOR_URL=$${COORDINATOR_URL:?Set COORDINATOR_URL to Laptop A, for example http://192.168.1.20:8001} python3 -m client.clinical_worker
+
 # --- Removes all generated files across every folder ---
 
 clean:

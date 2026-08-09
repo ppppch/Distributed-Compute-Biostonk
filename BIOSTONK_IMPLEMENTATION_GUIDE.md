@@ -15,9 +15,10 @@ rest of the internship. The long-term sections are product context, not assigned
 intern tracks.
 
 BioStonk is not yet a clinical decision-support product. The repository has a
-working Trial2Vec retrieval workflow, an experimental demo estimate, a simulated
-distributed job lifecycle, and a separate distributed MNIST demonstration. Do
-not describe the demo estimate as a probability of success or present generated
+working Trial2Vec retrieval workflow, measured similarity comparisons, a
+pull-based verified clinical compute coordinator, and a separate distributed
+MNIST demonstration.
+Do not describe similarity as a probability of success or present generated
 output as clinical, operational, or regulatory advice.
 
 ## Sprint Goal
@@ -29,11 +30,11 @@ developer intervention:
 2. Select a known Trial2Vec anchor trial from a usable catalog instead of typing
    an unknown NCT ID from memory.
 3. Submit one protocol or compare two protocol candidates.
-4. Watch the simulated workflow move through submitted, sharded, distributed,
-   running, verified, aggregated, and completed states.
-5. Inspect the experimental demo estimate, factor calculation, data-coverage
-   warnings, and real Trial2Vec nearest neighbors.
-6. Inspect approved mock devices, capacity, assigned tasks, and job history.
+4. Watch the local workflow move through uploaded, validated, retrieved,
+  compared, explained, and completed states.
+5. Inspect measured top and mean similarity, data-coverage warnings, sources,
+  and real Trial2Vec nearest neighbors.
+6. Inspect allowlisted workers, capacity, replica assignments, and job history.
 7. Repeat the scripted demo from a clean checkout using documented commands.
 
 The week is successful when the complete scripted workflow is stable,
@@ -47,9 +48,8 @@ It is not successful merely because more backend capabilities exist.
 - A polished local browser workflow for paste and `.txt`/`.md` upload.
 - Searchable curated Trial2Vec anchors and five real nearest neighbors per result.
 - One-candidate and two-candidate comparison workflows.
-- A versioned, transparent experimental estimate with factor availability and
-  metadata coverage.
-- Simulated lifecycle, approved devices, task assignments, verification, and
+- Sourced top and mean Trial2Vec similarity with metadata and protocol coverage.
+- Pull-based allowlisted workers, replica assignments, checksum verification, and
   job history.
 - A visibly simulated compute-cost summary with documented assumptions so the
   predictable-cost story can be demonstrated without making a savings claim.
@@ -274,7 +274,7 @@ Every pull request must be small enough to review in one sitting and include:
 - [ ] Paste and `.txt`/`.md` upload both populate the protocol editor.
 - [ ] A user can search and select a curated Trial2Vec anchor.
 - [ ] One- and two-candidate jobs complete without page reload.
-- [ ] Jobs visibly traverse all seven lifecycle states.
+- [ ] Jobs visibly traverse all six lifecycle states.
 - [ ] Job history distinguishes active and completed work.
 - [ ] Device assignments update during execution and clear after completion.
 - [ ] Simulated device-hours and cost assumptions are inspectable.
@@ -282,12 +282,11 @@ Every pull request must be small enough to review in one sitting and include:
 ### Results
 
 - [ ] Results show five real Trial2Vec neighbors per candidate.
-- [ ] Each factor shows weight, contribution, source, and availability.
-- [ ] Comparison shows why candidate estimates differ.
+- [ ] Each comparison measurement shows its value and source.
+- [ ] Comparison shows why candidate similarity values differ.
 - [ ] Missing metadata is visible and never replaced with invented values.
 - [ ] ClinicalTrials.gov links work for enriched records.
-- [ ] The phrase `Experimental demo estimate (not a validated clinical
-  prediction)` appears beside every score.
+- [ ] Every similarity amount states that it is not an outcome prediction.
 
 ### Reliability
 
@@ -301,7 +300,7 @@ Every pull request must be small enough to review in one sitting and include:
 
 - [ ] Primary and fallback scripts are rehearsed.
 - [ ] A backup recording exists.
-- [ ] Real Trial2Vec retrieval and mocked compute/scoring are described
+- [ ] Real Trial2Vec retrieval and mocked device activity are described
   separately.
 - [ ] No claim suggests clinical validation, production security, or real device
   execution.
@@ -323,12 +322,12 @@ Every pull request must be small enough to review in one sitting and include:
 | Evidence-quality evaluation harness | Complete | `clinical/evaluate_claims.py` |
 | Reviewer packet preparation | Complete | `clinical/review_packet.py` |
 | Protocol draft coverage and change analysis | Complete | `clinical/protocol_analysis.py` |
-| Simulated Trial2Vec distributed prediction demo | Complete | `clinical/demo_jobs.py` |
+| Local Trial2Vec comparison workflow | Complete | `clinical/demo_jobs.py` |
 | Local demo workspace | Complete baseline; needs hardening | `clinical/static/` |
 | Validated probability-of-success model | Blocked | Requires outcome data and qualified validation |
 | Source-linked regulatory claims | Not started | Phase 2 |
 | Authentication and tenant isolation | Not started | Phase 3 |
-| Distributed clinical task execution | Not started | Phase 4; demo lifecycle is simulated only |
+| Distributed clinical task execution | MVP complete | Pull workers, replica agreement, verified aggregation |
 
 ### Run Locally
 
@@ -360,13 +359,12 @@ the local demo.
 The current Emde dataset contains binary `sentiment` labels, not trial outcomes.
 It cannot train, calibrate, or validate a probability-of-success model.
 
-The demo may display a numeric `experimental demo estimate` only when it is
-shown with its transparent heuristic factors: Trial2Vec similarity plus whatever
-status, phase, enrollment, and intervention metadata is actually available from
-the bounded ClinicalTrials.gov catalog. It must never be called a probability,
-confidence interval, validated forecast, or projected increase or decrease in
-success rate. Every output must state that it is not a clinical, operational,
-or regulatory recommendation.
+The workspace may display cosine similarity amounts only when it identifies the
+selected known Trial2Vec anchor, the retrieved neighbors, and the measurement
+source. Similarity must never be called a probability, confidence interval,
+validated forecast, or projected increase or decrease in success rate. Every
+output must state that it is not an outcome prediction or a clinical,
+operational, or regulatory recommendation.
 
 An approved historical outcome dataset, calibration protocol, and qualified
 validation remain required before any predictive claim can be made.

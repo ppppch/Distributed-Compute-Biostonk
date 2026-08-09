@@ -6,6 +6,7 @@ service-account*.json
 *.joblib
 *.npz
 baseline_report.json
+.firebase/
 clinical/data/*
 !clinical/data/Emde/
 !clinical/data/Emde/*.xlsx
