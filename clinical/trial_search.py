@@ -48,6 +48,7 @@ class TrialSearch:
         self._indices_by_nct_id: dict[str, list[int]] = {}
         for index, nct_id in enumerate(self._nct_ids):
             self._indices_by_nct_id.setdefault(nct_id, []).append(index)
+        self._anchor_index = self._build_anchor_index()
 
     def metadata_for(self, nct_id: str) -> dict | None:
         """Return imported structured metadata for a known Trial2Vec identifier."""
@@ -110,6 +111,54 @@ class TrialSearch:
             if len(candidates) == limit:
                 break
         return candidates
+
+    def _build_anchor_index(self) -> list[dict[str, object]]:
+        """Return one deduplicated entry per known NCT ID, enriched when metadata exists."""
+        seen: set[str] = set()
+        anchors: list[dict[str, object]] = []
+        for index, nct_id in enumerate(self._nct_ids):
+            if nct_id in seen:
+                continue
+            seen.add(nct_id)
+            metadata = self.metadata_for(nct_id)
+            anchors.append(
+                {
+                    "nct_id": nct_id,
+                    "source_workbook": self._sources[index],
+                    "metadata": metadata,
+                }
+            )
+        return anchors
+
+    def anchor_trials(self, query: str | None = None, limit: int = 20) -> list[dict[str, object]]:
+        """Return a curated, searchable list of anchor trials from the dataset."""
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        normalized_query = normalize(query) if query else ""
+        results: list[dict[str, object]] = []
+        for anchor in self._anchor_index:
+            if normalized_query and not self._anchor_matches(anchor, normalized_query):
+                continue
+            results.append(anchor)
+            if len(results) == limit:
+                break
+        return results
+
+    def _anchor_matches(self, anchor: dict[str, object], normalized_query: str) -> bool:
+        metadata = anchor["metadata"]
+        if not isinstance(metadata, dict):
+            metadata = None
+        searchable: list[str | None] = [
+            str(anchor["nct_id"]),
+            metadata.get("official_title") if metadata else None,
+            metadata.get("brief_summary") if metadata else None,
+        ]
+        if metadata:
+            searchable.extend(metadata.get("conditions", []))
+            searchable.extend(metadata.get("phases", []))
+            searchable.append(metadata.get("study_type"))
+            searchable.append(metadata.get("overall_status"))
+        return any(normalized_query in normalize(value) for value in searchable if value)
 
 
 def text_matches(value: str | None, expected: str) -> bool:

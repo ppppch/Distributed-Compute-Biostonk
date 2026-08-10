@@ -177,7 +177,13 @@
         <label class="file-control">Choose protocol file<input id="protocol-file" type="file" accept=".txt,.md"></label>
         <label>Protocol text<textarea id="protocol-text" required>Phase 2 protocol evaluating an investigational therapy in adults with a rare disease.</textarea></label>
         <div class="fields two-up">
-          <label>Trial2Vec anchor NCT<input id="anchor-nct" value="NCT02545127" required></label>
+          <label class="anchor-field">Trial2Vec anchor
+            <div class="anchor-combobox" id="anchor-combobox-a">
+              <input type="text" class="anchor-search" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="anchor-list-a" aria-activedescendant="" placeholder="Search NCT ID or title">
+              <input type="hidden" id="anchor-nct" value="NCT02545127">
+              <ul id="anchor-list-a" class="anchor-list" role="listbox" aria-label="Trial2Vec anchor trials"></ul>
+            </div>
+          </label>
           <label>Indication<input id="indication" value="Rare disease"></label>
           <label>Phase<input id="study-phase" value="PHASE2"></label>
           <label>Population<input id="population" value="Adults"></label>
@@ -193,7 +199,13 @@
           <p class="eyebrow">Candidate B</p>
           <label>Protocol text<textarea id="protocol-text-b">Alternative protocol design for the same indication.</textarea></label>
           <div class="fields two-up">
-            <label>Trial2Vec anchor NCT<input id="anchor-nct-b" value="NCT02545127"></label>
+            <label class="anchor-field">Trial2Vec anchor
+              <div class="anchor-combobox" id="anchor-combobox-b">
+                <input type="text" class="anchor-search" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="anchor-list-b" aria-activedescendant="" placeholder="Search NCT ID or title">
+                <input type="hidden" id="anchor-nct-b" value="NCT02545127">
+                <ul id="anchor-list-b" class="anchor-list" role="listbox" aria-label="Trial2Vec anchor trials"></ul>
+              </div>
+            </label>
             <label>Planned enrollment<input id="planned-enrollment-b" type="number" min="1" value="120"></label>
           </div>
         </section>

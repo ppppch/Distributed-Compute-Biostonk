@@ -117,6 +117,159 @@ function analyzeWordAssociation() {
   output.append(count, explanation);
 }
 
+class AnchorCombobox {
+  constructor(containerId, hiddenInputId, initialNct, options = {}) {
+    this.container = byId(containerId);
+    this.searchInput = this.container.querySelector(".anchor-search");
+    this.hiddenInput = byId(hiddenInputId);
+    this.listbox = this.container.querySelector(".anchor-list");
+    this.onSelect = options.onSelect;
+    this.debounceTimer = null;
+    this.options = [];
+    this.activeIndex = -1;
+    this.selectedNct = initialNct || "";
+    if (this.selectedNct) {
+      this.hiddenInput.value = this.selectedNct;
+      this.searchInput.value = this.selectedNct;
+    }
+    this.searchInput.addEventListener("input", () => this.onInput());
+    this.searchInput.addEventListener("keydown", (event) => this.onKeyDown(event));
+    this.searchInput.addEventListener("blur", () => this.onBlur());
+    this.searchInput.addEventListener("focus", () => { if (this.searchInput.value.trim()) this.fetchAnchors(this.searchInput.value.trim()); });
+    this.listbox.addEventListener("mousedown", (event) => this.onOptionClick(event));
+  }
+
+  async onInput() {
+    const query = this.searchInput.value.trim();
+    this.hiddenInput.value = "";
+    this.selectedNct = "";
+    clearTimeout(this.debounceTimer);
+    this.setLoading(true);
+    this.debounceTimer = setTimeout(() => this.fetchAnchors(query), 200);
+  }
+
+  async fetchAnchors(query) {
+    const url = query ? `/trials/catalog?query=${encodeURIComponent(query)}&limit=20` : "/trials/catalog?limit=20";
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Anchor search failed");
+      const anchors = await response.json();
+      this.renderOptions(anchors);
+    } catch (error) {
+      this.renderOptions([]);
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  renderOptions(anchors) {
+    this.options = anchors;
+    this.activeIndex = -1;
+    if (anchors.length === 0) {
+      this.listbox.innerHTML = `<li class="anchor-empty" role="option" aria-selected="false">No matching anchor trials</li>`;
+      this.openListbox();
+      return;
+    }
+    this.listbox.innerHTML = anchors.map((anchor, index) => {
+      const metaParts = [
+        anchor.indication,
+        anchor.phase,
+        anchor.study_type,
+        anchor.overall_status,
+      ].filter(Boolean);
+      const metaText = metaParts.length ? ` · ${metaParts.join(" · ")}` : "";
+      const titleText = anchor.title ? ` — ${anchor.title}` : "";
+      const unavailable = anchor.metadata_available ? "" : " · metadata unavailable";
+      return `<li id="${this.optionId(index)}" role="option" aria-selected="false" data-index="${index}"><strong>${anchor.nct_id}</strong><span class="anchor-meta">${titleText}${metaText}${unavailable}</span></li>`;
+    }).join("");
+    this.openListbox();
+  }
+
+  optionId(index) { return `${this.container.id}-option-${index}`; }
+
+  openListbox() {
+    this.listbox.classList.add("open");
+    this.searchInput.setAttribute("aria-expanded", "true");
+  }
+
+  closeListbox() {
+    this.listbox.classList.remove("open");
+    this.searchInput.setAttribute("aria-expanded", "false");
+    this.searchInput.setAttribute("aria-activedescendant", "");
+    this.activeIndex = -1;
+  }
+
+  setLoading(isLoading) {
+    this.container.classList.toggle("loading", isLoading);
+    this.searchInput.setAttribute("aria-busy", isLoading ? "true" : "false");
+  }
+
+  onKeyDown(event) {
+    if (this.options.length === 0 && event.key !== "Escape") return;
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        this.moveActive(1);
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        this.moveActive(-1);
+        break;
+      case "Enter":
+        event.preventDefault();
+        if (this.activeIndex >= 0) {
+          this.selectOption(this.activeIndex);
+        }
+        break;
+      case "Escape":
+        this.closeListbox();
+        break;
+    }
+  }
+
+  moveActive(delta) {
+    if (this.options.length === 0) return;
+    this.activeIndex = (this.activeIndex + delta + this.options.length) % this.options.length;
+    this.updateActiveDescendant();
+  }
+
+  updateActiveDescendant() {
+    [...this.listbox.children].forEach((child, index) => {
+      const selected = index === this.activeIndex;
+      child.setAttribute("aria-selected", selected ? "true" : "false");
+      child.classList.toggle("active", selected);
+    });
+    if (this.activeIndex >= 0) {
+      this.searchInput.setAttribute("aria-activedescendant", this.optionId(this.activeIndex));
+      this.listbox.children[this.activeIndex].scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  onOptionClick(event) {
+    const option = event.target.closest("[data-index]");
+    if (!option) return;
+    this.selectOption(Number(option.dataset.index));
+  }
+
+  selectOption(index) {
+    const anchor = this.options[index];
+    if (!anchor) return;
+    this.selectedNct = anchor.nct_id;
+    this.hiddenInput.value = anchor.nct_id;
+    this.searchInput.value = `${anchor.nct_id}${anchor.title ? ` — ${anchor.title}` : ""}`;
+    this.closeListbox();
+    this.searchInput.setAttribute("aria-invalid", "false");
+    if (this.onSelect) this.onSelect(anchor);
+  }
+
+  onBlur() {
+    setTimeout(() => {
+      this.closeListbox();
+      this.searchInput.setAttribute("aria-invalid", this.hiddenInput.value ? "false" : "true");
+    }, 150);
+  }
+}
+
 async function loadJobs() {
   const jobs = await (await fetch("/comparison-jobs/history")).json();
   byId("job-list").innerHTML = jobs.map((job) => `<div class="job-row"><strong>${job.job_id}</strong><span>${job.tasks.length} replicas</span><span class="job-status">${job.status}</span></div>`).join("");
@@ -162,7 +315,7 @@ async function loadComputeReadiness() {
   }
 }
 
-let debounce; byId("protocol-form").addEventListener("input", () => { updateDraftMetrics(); clearTimeout(debounce); debounce = setTimeout(analyzeDraft, 600); });
+let debounce; byId("protocol-form").addEventListener("input", (event) => { if (event.target.classList.contains("anchor-search")) return; updateDraftMetrics(); clearTimeout(debounce); debounce = setTimeout(analyzeDraft, 600); });
 byId("protocol-form").addEventListener("submit", submitJob);
 byId("compare-toggle").addEventListener("change", (event) => { byId("candidate-b").classList.toggle("hidden", !event.target.checked); updateDraftMetrics(); });
 byId("protocol-file").addEventListener("change", async (event) => { const file = event.target.files[0]; if (file) byId("protocol-text").value = await file.text(); analyzeDraft(); });
@@ -173,6 +326,21 @@ byId("devices-button").addEventListener("click", () => byId("devices").scrollInt
 byId("analyze-word").addEventListener("click", analyzeWordAssociation);
 byId("association-word").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); analyzeWordAssociation(); } });
 byId("close-gallery").addEventListener("click", () => { byId("model-gallery").open = false; byId("model-gallery").scrollIntoView({ behavior: "smooth", block: "nearest" }); });
+["indication", "study-phase"].forEach((id) => { byId(id).addEventListener("input", () => { byId(id).dataset.userEdited = "true"; }); });
+const anchorA = new AnchorCombobox("anchor-combobox-a", "anchor-nct", "NCT02545127", {
+  onSelect: (anchor) => {
+    byId("anchor-metric").textContent = anchor.nct_id;
+    if (anchor.indication && !byId("indication").dataset.userEdited) {
+      byId("indication").value = anchor.indication;
+    }
+    if (anchor.phase && !byId("study-phase").dataset.userEdited) {
+      byId("study-phase").value = anchor.phase;
+    }
+    updateDraftMetrics();
+    analyzeDraft();
+  },
+});
+const anchorB = new AnchorCombobox("anchor-combobox-b", "anchor-nct-b", "NCT02545127");
 updateDraftMetrics(); analyzeDraft(); loadDevices(); loadJobs(); loadComputeReadiness();
 setInterval(loadComputeReadiness, 5000);
 setInterval(loadDevices, 3000);
