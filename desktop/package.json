@@ -1,0 +1,13 @@
+{
+  "name": "biostonk-desktop-build",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@electron/get": "4.0.2",
+    "extract-zip": "2.0.1"
+  }
+}

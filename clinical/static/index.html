@@ -4,17 +4,40 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BioStonk Clinical Compute</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260809-5">
+    <link rel="stylesheet" href="/static/styles.css?v=20260810-4">
   </head>
   <body>
       <div class="dashboard-shell">
       <header class="dashboard-header">
         <a class="brand" href="#workspace" aria-label="BioStonk home">BIO<span>STONK</span></a>
         <div class="header-context"><span class="environment-dot"></span>Pre-production compute pilot</div>
-        <div id="compute-mode" class="badge">Checking topology</div>
+        <div class="header-actions">
+          <div id="compute-mode" class="badge">Checking topology</div>
+          <div class="desktop-download">
+            <button class="download-trigger" type="button" aria-expanded="false" aria-controls="desktop-download-menu"><span class="download-icon" aria-hidden="true">&#8595;</span>Download app</button>
+            <div id="desktop-download-menu" class="download-menu">
+              <a href="https://firebasestorage.googleapis.com/v0/b/biostonk.firebasestorage.app/o/desktop%2FBioStonk-macOS.dmg?alt=media">
+                <span class="platform-mark" aria-hidden="true">Mac</span>
+                <span><strong>Download for Mac</strong><small>Apple silicon .dmg</small></span>
+              </a>
+              <a href="https://firebasestorage.googleapis.com/v0/b/biostonk.firebasestorage.app/o/desktop%2FBioStonk-Windows.zip?alt=media">
+                <span class="platform-mark" aria-hidden="true">Win</span>
+                <span><strong>Download for Windows</strong><small>64-bit portable .zip</small></span>
+              </a>
+            </div>
+          </div>
+        </div>
       </header>
 
-      <div class="dashboard-layout">
+      <nav class="workspace-tabs" aria-label="Open workspaces">
+        <button id="overview-tab" class="workspace-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="overview-view">Pipeline overview</button>
+        <div id="trial-tab-group" class="workspace-tab-group hidden">
+          <button id="trial-tab" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="trial-workspace">Trial A <span>NCT02545127</span></button>
+          <button id="close-trial-tab" class="workspace-tab-close" type="button" aria-label="Close Trial A workspace">&times;</button>
+        </div>
+      </nav>
+
+      <div id="overview-view" class="dashboard-layout" role="tabpanel" aria-labelledby="overview-tab">
         <main class="trial-canvas">
           <div class="canvas-heading">
             <div><p class="eyebrow">Clinical evidence workspace</p><h1>Protocol comparison workspace</h1></div>
@@ -26,13 +49,14 @@
             <button id="devices-button" class="control-button" type="button"><span id="device-count" class="control-value">0</span>Devices pooled</button>
           </section>
 
-          <section id="compute-readiness-notice" class="notice"><strong>Pre-production pilot.</strong> Checking worker topology. Worker IDs are allowlisted processes, not certificate-backed approved hardware.</section>
+          <section id="compute-readiness-notice" class="notice"><strong>Checking topology.</strong> Loading worker and security posture…</section>
 
           <section id="workspace" class="trial-grid" aria-label="Trial overview">
             <article class="metric-card trial-card is-active">
+              <button id="open-trial-workspace" class="trial-card-hitbox" type="button" aria-label="Open Trial A document workspace"></button>
               <div class="metric-heading"><span>Trial A</span><span class="live-indicator">Active</span></div>
               <strong id="candidate-a-score" class="metric-value">Draft</strong>
-              <p id="candidate-a-caption">Awaiting comparison</p>
+              <p id="candidate-a-caption">Open trial workspace</p>
             </article>
             <article class="metric-card trial-card">
               <div class="metric-heading"><span>Trial B</span><span class="metric-index">02</span></div>
@@ -169,12 +193,72 @@
           </section>
         </aside>
       </div>
+
+      <section id="trial-workspace" class="trial-workspace hidden" role="tabpanel" aria-labelledby="trial-tab">
+        <main class="document-workbench">
+          <header class="trial-workspace-header">
+            <div>
+              <p class="eyebrow">Trial document workspace</p>
+              <h1 id="trial-workspace-title">Loading trial documents</h1>
+              <p class="trial-identity"><span id="trial-workspace-nct">NCT02545127</span><span id="trial-workspace-status">Loading</span><span>Working draft</span></p>
+            </div>
+            <div class="prototype-status"><span class="status-indicator"></span><span id="trial-save-status" class="status-copy">Loading trial data</span></div>
+          </header>
+
+          <nav id="document-tabs" class="document-tabs" aria-label="Trial documents" role="tablist">
+            <button class="document-tab is-active" type="button" role="tab" aria-selected="true">Loading documents <span>Source metadata</span></button>
+          </nav>
+
+          <section class="document-editor-frame" aria-label="Trial document editor">
+            <div class="editor-toolbar" aria-label="Editing tools">
+              <div class="formatting-tools">
+                <button type="button" data-command="bold" aria-label="Bold selected text" title="Bold"><strong>B</strong></button>
+                <button type="button" data-command="italic" aria-label="Italicize selected text" title="Italic"><em>I</em></button>
+                <span class="toolbar-divider"></span>
+                <button type="button" data-command="insertUnorderedList" aria-label="Create bulleted list" title="Bulleted list">&#8226;</button>
+              </div>
+              <div class="editor-meta"><span id="editor-word-count">0 words</span><span id="editor-save-state">Loading</span></div>
+            </div>
+            <article id="trial-document-editor" class="trial-document-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Protocol synopsis editor" spellcheck="true"></article>
+          </section>
+        </main>
+
+        <aside class="prediction-panel" aria-label="Trial success prediction and explainability">
+          <header class="prediction-header">
+            <div><p class="eyebrow">Illustrative prediction</p><h2>Trial success estimate</h2></div>
+            <span class="prototype-badge">UI prototype</span>
+          </header>
+          <div class="prediction-score-block">
+            <div class="prediction-score"><strong id="trial-success-score">68%</strong><span id="trial-success-band">Moderate</span></div>
+            <div class="score-track" aria-hidden="true"><span id="trial-success-track"></span></div>
+            <p>This estimate is simulated for interface testing and is not a validated clinical prediction.</p>
+          </div>
+
+          <section class="contribution-section">
+            <div class="panel-section-heading"><h3>Phrase contributions</h3><span id="contribution-count">5 signals</span></div>
+            <p class="section-intro">Phrases currently carrying the most weight. Select Go to phrase to locate one in the document.</p>
+            <div id="phrase-contributions" class="phrase-contributions"></div>
+          </section>
+
+          <section class="prediction-details">
+            <h3>Prediction details</h3>
+            <dl>
+              <dt>Document</dt><dd id="prediction-document-name">Protocol synopsis</dd>
+              <dt>Model</dt><dd>Outcome model placeholder</dd>
+              <dt>Last analyzed</dt><dd id="prediction-updated-at">Just now</dd>
+              <dt>Confidence</dt><dd>Not calibrated</dd>
+              <dt>Evidence source</dt><dd><a id="trial-source-link" href="#" target="_blank" rel="noreferrer">ClinicalTrials.gov</a></dd>
+            </dl>
+          </section>
+        </aside>
+      </section>
     </div>
 
     <dialog id="protocol-dialog" class="protocol-dialog">
       <form id="protocol-form" class="editor-panel">
-        <div class="dialog-heading"><div><p class="eyebrow">New comparison</p><h2>Upload protocol trial</h2></div><button id="close-protocol" class="icon-button" type="button" aria-label="Close protocol editor">&times;</button></div>
-        <label class="file-control">Choose protocol file<input id="protocol-file" type="file" accept=".txt,.md"></label>
+        <div class="dialog-heading"><div><p class="eyebrow">New document workspace</p><h2>Upload trial document</h2></div><button id="close-protocol" class="icon-button" type="button" aria-label="Close protocol editor">&times;</button></div>
+        <label class="file-control">Choose trial document<input id="protocol-file" type="file"></label>
+        <div id="file-extraction-status" class="file-extraction-status" role="status">Word, PDF, RTF, ODT, PowerPoint, Excel, HTML, and text/data files up to 25 MB.</div>
         <label>Protocol text<textarea id="protocol-text" required>Phase 2 protocol evaluating an investigational therapy in adults with a rare disease.</textarea></label>
         <div class="fields two-up">
           <label>Trial2Vec anchor NCT<input id="anchor-nct" value="NCT02545127" required></label>
@@ -188,7 +272,7 @@
           <label>Planned enrollment<input id="planned-enrollment" type="number" min="1" value="80"></label>
           <label>Planned sites<input id="planned-sites" type="number" min="1" value="4"></label>
         </div>
-        <label class="toggle"><input id="compare-toggle" type="checkbox"> Compare with a second protocol candidate</label>
+        <label class="toggle comparison-only"><input id="compare-toggle" type="checkbox"> Compare with a second protocol candidate</label>
         <section id="candidate-b" class="candidate-b hidden">
           <p class="eyebrow">Candidate B</p>
           <label>Protocol text<textarea id="protocol-text-b">Alternative protocol design for the same indication.</textarea></label>
@@ -197,9 +281,9 @@
             <label>Planned enrollment<input id="planned-enrollment-b" type="number" min="1" value="120"></label>
           </div>
         </section>
-        <button id="submit-comparison" class="submit-button" type="submit">Run trial comparison</button>
+        <button id="submit-comparison" class="submit-button" type="submit">Open in text editor</button>
       </form>
     </dialog>
-    <script src="/static/app.js?v=20260809-7"></script>
+    <script src="/static/app.js?v=20260810-11"></script>
   </body>
 </html>
