@@ -341,6 +341,14 @@ const anchorA = new AnchorCombobox("anchor-combobox-a", "anchor-nct", "NCT025451
   },
 });
 const anchorB = new AnchorCombobox("anchor-combobox-b", "anchor-nct-b", "NCT02545127");
-updateDraftMetrics(); analyzeDraft(); loadDevices(); loadJobs(); loadComputeReadiness();
-setInterval(loadComputeReadiness, 5000);
-setInterval(loadDevices, 3000);
+function initializeDashboard() {
+  updateDraftMetrics();
+  analyzeDraft();
+  loadDevices();
+  loadJobs();
+  loadComputeReadiness();
+  setInterval(loadComputeReadiness, 5000);
+  setInterval(loadDevices, 3000);
+}
+
+window.onBiostonkAuthenticated = initializeDashboard;
