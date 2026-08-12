@@ -2,8 +2,9 @@
  * BioStonk authentication gate.
  *
  * Supports a built-in demo login (username/password) and Firebase Auth
- * (Google + email/password). Demo mode is active by default; Firebase Auth
- * is enabled once a project web config is added below.
+ * (Google + email/password). Additional profile data is stored in Firestore.
+ * Demo mode is active by default; Firebase Auth is enabled once a project web
+ * config is added below.
  */
 
 // ---------------------------------------------------------------------------
@@ -19,17 +20,17 @@ const AUTH_CONFIG = {
   // Paste your Firebase project web app config here to enable real auth.
   // Leave apiKey as null to stay in demo mode.
   firebase: {
-    apiKey: null,
-    authDomain: null,
+    apiKey: "AIzaSyAPb1zfqmLAL_yJu_XFDHXFANf5VaxMMCU",
+    authDomain: "biostonk.firebaseapp.com",
     projectId: "biostonk",
-    storageBucket: null,
-    messagingSenderId: null,
-    appId: null,
+    storageBucket: "biostonk.firebasestorage.app",
+    messagingSenderId: "559267443625",
+    appId: "1:559267443625:web:811a6ce247890464214ab8",
   },
 };
 
 // ---------------------------------------------------------------------------
-// Demo auth provider (localStorage-backed)
+// Demo auth provider (localStorage-backed, always available fallback)
 // ---------------------------------------------------------------------------
 
 class DemoAuth {
@@ -82,25 +83,90 @@ class DemoAuth {
 }
 
 // ---------------------------------------------------------------------------
+// Firebase SDK loader
+// ---------------------------------------------------------------------------
+
+class FirebaseServices {
+  constructor(config) {
+    this.config = config;
+    this.app = null;
+    this.auth = null;
+    this.db = null;
+    this.functions = null;
+    this.googleProvider = null;
+  }
+
+  isConfigured() {
+    return Boolean(this.config.apiKey);
+  }
+
+  async load() {
+    if (this.app) return this;
+
+    const [{ initializeApp }, firebaseAuth, firebaseFirestore] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"),
+      import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"),
+    ]);
+
+    const { getAuth, GoogleAuthProvider, onAuthStateChanged, signOut } = firebaseAuth;
+    const { getFirestore, doc, setDoc, serverTimestamp } = firebaseFirestore;
+
+    this.app = initializeApp(this.config);
+    this.auth = getAuth(this.app);
+    this.db = getFirestore(this.app);
+    this.googleProvider = new GoogleAuthProvider();
+
+    this.functions = {
+      signInWithPopup: firebaseAuth.signInWithPopup,
+      signInWithEmailAndPassword: firebaseAuth.signInWithEmailAndPassword,
+      createUserWithEmailAndPassword: firebaseAuth.createUserWithEmailAndPassword,
+      updateProfile: firebaseAuth.updateProfile,
+      signOut,
+      onAuthStateChanged,
+      doc,
+      setDoc,
+      serverTimestamp,
+    };
+
+    return this;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Firestore user profile store
+// ---------------------------------------------------------------------------
+
+class UserProfileStore {
+  constructor(services) {
+    this.services = services;
+  }
+
+  async create(uid, { name, email }) {
+    const { doc, setDoc, serverTimestamp } = this.services.functions;
+    const userRef = doc(this.services.db, "users", uid);
+    await setDoc(userRef, {
+      name: name || "",
+      email: email || "",
+      createdAt: serverTimestamp(),
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Firebase auth provider
 // ---------------------------------------------------------------------------
 
 class FirebaseAuthProvider {
   constructor(config) {
     this.config = config;
-    this.app = null;
-    this.auth = null;
-    this.googleProvider = null;
+    this.services = new FirebaseServices(config);
+    this.profileStore = null;
     this.unsubscribe = null;
-    // Cached imported functions so event handlers can call them.
-    this.signInWithPopupFn = null;
-    this.signInWithEmailAndPasswordFn = null;
-    this.createUserWithEmailAndPasswordFn = null;
-    this.signOutFn = null;
   }
 
   isConfigured() {
-    return Boolean(this.config.apiKey);
+    return this.services.isConfigured();
   }
 
   async init(onStateChange) {
@@ -108,38 +174,22 @@ class FirebaseAuthProvider {
       throw new Error("Firebase web config is not set in auth.js");
     }
 
-    const [{ initializeApp }, firebaseAuth] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"),
-      import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"),
-    ]);
+    await this.services.load();
+    this.profileStore = new UserProfileStore(this.services);
 
-    const {
-      getAuth,
-      GoogleAuthProvider,
-      onAuthStateChanged,
-      signOut,
-      signInWithPopup,
-      signInWithEmailAndPassword,
-      createUserWithEmailAndPassword,
-    } = firebaseAuth;
-
-    this.app = initializeApp(this.config);
-    this.auth = getAuth(this.app);
-    this.googleProvider = new GoogleAuthProvider();
-    this.signOutFn = signOut;
-    this.signInWithPopupFn = signInWithPopup;
-    this.signInWithEmailAndPasswordFn = signInWithEmailAndPassword;
-    this.createUserWithEmailAndPasswordFn = createUserWithEmailAndPassword;
-
-    this.unsubscribe = onAuthStateChanged(this.auth, (user) => {
-      onStateChange(user);
-    });
+    this.unsubscribe = this.services.functions.onAuthStateChanged(
+      this.services.auth,
+      (user) => onStateChange(user)
+    );
   }
 
   async signInWithGoogle() {
     try {
-      const result = await this.signInWithPopupFn(this.auth, this.googleProvider);
-      return { success: true, user: result.user };
+      const { user } = await this.services.functions.signInWithPopup(
+        this.services.auth,
+        this.services.googleProvider
+      );
+      return { success: true, user };
     } catch (error) {
       return { success: false, error: this.formatError(error) };
     }
@@ -147,25 +197,40 @@ class FirebaseAuthProvider {
 
   async signInWithEmail(email, password) {
     try {
-      const result = await this.signInWithEmailAndPasswordFn(this.auth, email, password);
-      return { success: true, user: result.user };
+      const { user } = await this.services.functions.signInWithEmailAndPassword(
+        this.services.auth,
+        email,
+        password
+      );
+      return { success: true, user };
     } catch (error) {
       return { success: false, error: this.formatError(error) };
     }
   }
 
-  async createAccount(email, password) {
+  async createAccount(email, password, name) {
     try {
-      const result = await this.createUserWithEmailAndPasswordFn(this.auth, email, password);
-      return { success: true, user: result.user };
+      const { user } = await this.services.functions.createUserWithEmailAndPassword(
+        this.services.auth,
+        email,
+        password
+      );
+
+      if (name) {
+        await this.services.functions.updateProfile(user, { displayName: name });
+      }
+
+      await this.profileStore.create(user.uid, { name, email });
+
+      return { success: true, user };
     } catch (error) {
       return { success: false, error: this.formatError(error) };
     }
   }
 
   async logout() {
-    if (this.auth && this.signOutFn) {
-      await this.signOutFn(this.auth);
+    if (this.services.auth) {
+      await this.services.functions.signOut(this.services.auth);
     }
   }
 
@@ -184,6 +249,8 @@ class FirebaseAuthProvider {
       "auth/invalid-credential": "Invalid email or password.",
       "auth/configuration-not-found":
         "Firebase Authentication is not enabled for this project or provider.",
+      "permission-denied":
+        "Firestore permission denied. Check your Firestore security rules.",
     };
     return map[error.code] || error.message || "An error occurred during sign in.";
   }
@@ -244,8 +311,10 @@ class AuthManager {
     return result;
   }
 
-  async firebaseCreateAccount(email, password) {
-    return await this.firebase.createAccount(email, password);
+  async firebaseCreateAccount(email, password, name) {
+    const result = await this.firebase.createAccount(email, password, name);
+    if (result.success) this.onChange(result.user);
+    return result;
   }
 
   async logout() {
@@ -302,21 +371,22 @@ function updateAuthUI(user) {
   }
 }
 
-function initAuthUI() {
-  authManager.init(updateAuthUI);
-
+function attachDemoLogin() {
   const demoForm = document.getElementById("demo-login-form");
-  if (demoForm) {
-    demoForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      setError("demo-login-error", "");
-      const username = getValue("demo-username");
-      const password = getValue("demo-password");
-      const result = await authManager.demoLogin(username, password);
-      if (!result.success) setError("demo-login-error", result.error);
-    });
-  }
+  if (!demoForm) return;
 
+  demoForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setError("demo-login-error", "");
+    const result = await authManager.demoLogin(
+      getValue("demo-username"),
+      getValue("demo-password")
+    );
+    if (!result.success) setError("demo-login-error", result.error);
+  });
+}
+
+function attachFirebaseLogin() {
   const googleButton = document.getElementById("google-signin-button");
   if (googleButton) {
     googleButton.addEventListener("click", async () => {
@@ -326,14 +396,15 @@ function initAuthUI() {
     });
   }
 
-  const firebaseForm = document.getElementById("firebase-email-form");
-  if (firebaseForm) {
-    firebaseForm.addEventListener("submit", async (event) => {
+  const emailForm = document.getElementById("firebase-email-form");
+  if (emailForm) {
+    emailForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       setError("firebase-login-error", "");
-      const email = getValue("firebase-email");
-      const password = getValue("firebase-password");
-      const result = await authManager.firebaseEmailLogin(email, password);
+      const result = await authManager.firebaseEmailLogin(
+        getValue("firebase-email"),
+        getValue("firebase-password")
+      );
       if (!result.success) setError("firebase-login-error", result.error);
     });
   }
@@ -342,19 +413,30 @@ function initAuthUI() {
   if (createButton) {
     createButton.addEventListener("click", async () => {
       setError("firebase-login-error", "");
-      const email = getValue("firebase-email");
-      const password = getValue("firebase-password");
-      const result = await authManager.firebaseCreateAccount(email, password);
+      const result = await authManager.firebaseCreateAccount(
+        getValue("firebase-email"),
+        getValue("firebase-password"),
+        getValue("firebase-name")
+      );
       if (!result.success) setError("firebase-login-error", result.error);
     });
   }
+}
 
+function attachSignOut() {
   const signOutButton = document.getElementById("sign-out-button");
   if (signOutButton) {
     signOutButton.addEventListener("click", async () => {
       await authManager.logout();
     });
   }
+}
+
+function initAuthUI() {
+  authManager.init(updateAuthUI);
+  attachDemoLogin();
+  attachFirebaseLogin();
+  attachSignOut();
 }
 
 if (document.readyState === "loading") {

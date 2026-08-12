@@ -63,6 +63,27 @@ const AUTH_CONFIG = {
 
 Once `apiKey` is set, `auth.js` automatically switches from demo mode to Firebase Auth.
 
+### Enabling Firestore (for user profiles)
+
+When a user creates an account, their name and email are stored in Firestore under `users/{uid}`. Passwords are never stored in Firestore.
+
+1. In the [Firebase Console](https://console.firebase.google.com/project/biostonk/firestore), go to **Firestore Database** → **Create database**.
+2. Start in **test mode** for development, then update security rules before production.
+3. A minimal rule set for this app is:
+
+```text
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```
+
+This lets authenticated users read and write only their own profile document.
+
 ## GitHub Actions deploy
 
 The workflow in `.github/workflows/firebase-hosting-deploy.yml` deploys on pushes to `main` when static files or Firebase config change.
