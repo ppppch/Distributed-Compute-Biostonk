@@ -154,16 +154,3 @@ class ComparisonTaskResultRequest(BaseModel):
     duration_seconds: float = Field(ge=0)
     success: bool
     error: str | None = None
-
-
-class CuratedAnchor(BaseModel):
-    """A selectable Trial2Vec anchor trial surfaced in the catalog UI."""
-
-    nct_id: str = Field(min_length=1)
-    title: str | None = None
-    indication: str | None = None
-    phase: str | None = None
-    study_type: str | None = None
-    overall_status: str | None = None
-    source_workbook: str
-    metadata_available: bool

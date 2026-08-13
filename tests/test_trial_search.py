@@ -68,27 +68,6 @@ class TestTrialSearch(unittest.TestCase):
         self.assertEqual([result.nct_id for result in results], ["NCT002"])
         self.assertEqual(results[0].metadata["study_type"], "INTERVENTIONAL")
 
-    def test_returns_anchor_catalog(self):
-        anchors = self.search.anchor_trials(limit=10)
-
-        self.assertEqual(len(anchors), 3)
-        self.assertEqual({anchor["nct_id"] for anchor in anchors}, {"NCT001", "NCT002", "NCT003"})
-
-    def test_filters_anchor_catalog_by_query(self):
-        anchors = self.search.anchor_trials(query="rare", limit=10)
-
-        self.assertEqual([anchor["nct_id"] for anchor in anchors], ["NCT002"])
-
-    def test_filters_anchor_catalog_by_nct_id(self):
-        anchors = self.search.anchor_trials(query="NCT003", limit=10)
-
-        self.assertEqual([anchor["nct_id"] for anchor in anchors], ["NCT003"])
-
-    def test_anchor_catalog_respects_limit(self):
-        anchors = self.search.anchor_trials(limit=2)
-
-        self.assertEqual(len(anchors), 2)
-
 
 if __name__ == "__main__":
     unittest.main()

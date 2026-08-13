@@ -56,26 +56,6 @@ class TestClinicalApi(unittest.TestCase):
         self.assertTrue(response.json()[0]["metadata_available"])
         self.assertEqual(response.json()[0]["metadata"]["study_type"], "INTERVENTIONAL")
 
-    def test_returns_trial_catalog(self):
-        response = self.client.get("/trials/catalog")
-
-        self.assertEqual(response.status_code, 200)
-        results = response.json()
-        self.assertEqual(len(results), 2)
-        by_id = {item["nct_id"]: item for item in results}
-        self.assertIn("NCT001", by_id)
-        self.assertIn("NCT002", by_id)
-        self.assertEqual(by_id["NCT002"]["title"], "Example study")
-        self.assertEqual(by_id["NCT002"]["indication"], "Rare disease")
-        self.assertEqual(by_id["NCT002"]["phase"], "PHASE2")
-        self.assertTrue(by_id["NCT002"]["metadata_available"])
-
-    def test_filters_trial_catalog_by_query(self):
-        response = self.client.get("/trials/catalog?query=rare")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual([item["nct_id"] for item in response.json()], ["NCT002"])
-
     def test_serves_demo_workspace(self):
         response = self.client.get("/")
 
