@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /desktop/{fileName} {
+      allow read: if fileName == "BioStonk-macOS.dmg"
+                  || fileName == "BioStonk-Windows.zip";
+      allow write: if false;
+    }
+  }
+}

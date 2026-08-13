@@ -7,6 +7,10 @@ service-account*.json
 *.npz
 baseline_report.json
 .firebase/
+desktop/node_modules/
+desktop/dist/build/
+desktop/dist/*.dmg
+desktop/dist/*.zip
 clinical/data/*
 !clinical/data/Emde/
 !clinical/data/Emde/*.xlsx
