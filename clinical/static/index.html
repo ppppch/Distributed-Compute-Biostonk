@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BioStonk Clinical Compute</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260813-3">
+    <link rel="stylesheet" href="/static/styles.css?v=20260813-4">
   </head>
   <body>
     <div id="login-shell" class="login-shell">
@@ -92,7 +92,7 @@
       <nav class="workspace-tabs" aria-label="Open workspaces">
         <button id="overview-tab" class="workspace-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="overview-view">Pipeline overview</button>
         <div id="trial-tab-group" class="workspace-tab-group hidden">
-          <button id="trial-tab" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="trial-workspace">Trial A <span>NCT02545127</span></button>
+          <button id="trial-tab" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="trial-workspace">Trial A <span id="trial-tab-nct">NCT02545127</span></button>
           <button id="close-trial-tab" class="workspace-tab-close" type="button" aria-label="Close Trial A workspace">&times;</button>
         </div>
       </nav>
@@ -281,22 +281,42 @@
             </div>
             <article id="trial-document-editor" class="trial-document-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Protocol synopsis editor" spellcheck="true"></article>
           </section>
+          <div id="match-navigator" class="match-navigator hidden" role="group" aria-label="Phrase match navigation">
+            <span id="match-navigator-count" class="match-navigator-count" aria-live="polite">1 / 1</span>
+            <button id="match-previous" type="button" aria-label="Previous phrase match" title="Previous match">&#8593;</button>
+            <button id="match-next" type="button" aria-label="Next phrase match" title="Next match">&#8595;</button>
+          </div>
         </main>
 
         <aside class="prediction-panel" aria-label="Trial success prediction and explainability">
           <header class="prediction-header">
-            <div><p class="eyebrow">Illustrative prediction</p><h2>Trial success estimate</h2></div>
-            <span class="prototype-badge">UI prototype</span>
+            <div><p class="eyebrow">Live local analysis</p><h2>Draft completion signal</h2></div>
+            <span class="prototype-badge">Local only</span>
           </header>
           <div class="prediction-score-block">
             <div class="prediction-score"><strong id="trial-success-score">68%</strong><span id="trial-success-band">Moderate</span></div>
             <div class="score-track" aria-hidden="true"><span id="trial-success-track"></span></div>
-            <p>This estimate is simulated for interface testing and is not a validated clinical prediction.</p>
+            <p id="live-score-detail">Changes as you edit, using locally detected protocol-language signals. It is not a validated clinical outcome prediction.</p>
           </div>
 
+          <section class="prediction-details" aria-live="polite">
+            <h3>Historical NCT reference</h3>
+            <dl>
+              <dt>NCT</dt><dd id="embedding-nct-id">NCT02545127</dd>
+              <dt>Local score</dt><dd id="embedding-score-state">Loading local model</dd>
+            </dl>
+            <p id="embedding-score-detail">Requires a stored 128-dimension embedding for this NCT. This reference remains fixed while the draft is edited.</p>
+          </section>
+
+          <section class="similar-trials-section" aria-live="polite" aria-labelledby="similar-trials-heading">
+            <div class="panel-section-heading"><h3 id="similar-trials-heading">Similar trials</h3><span id="similar-trials-count">Loading</span></div>
+            <p id="similar-trials-detail" class="section-intro">Finding the closest historical trials from the stored NCT embedding.</p>
+            <ol id="similar-trials" class="similar-trials" aria-label="Most similar historical trials"></ol>
+          </section>
+
           <section class="contribution-section">
-            <div class="panel-section-heading"><h3>Phrase contributions</h3><span id="contribution-count">5 signals</span></div>
-            <p class="section-intro">Phrases currently carrying the most weight. Select Go to phrase to locate one in the document.</p>
+            <div class="panel-section-heading"><h3>Detected evidence</h3><span id="contribution-count">5 signals</span></div>
+            <p class="section-intro">Capstone keyword evidence and protocol phrases currently affecting the live draft signal. Select Go to phrase to locate one in the document.</p>
             <div id="phrase-contributions" class="phrase-contributions"></div>
           </section>
 
@@ -304,8 +324,8 @@
             <h3>Prediction details</h3>
             <dl>
               <dt>Document</dt><dd id="prediction-document-name">Protocol synopsis</dd>
-              <dt>Model</dt><dd>Outcome model placeholder</dd>
-              <dt>Last analyzed</dt><dd id="prediction-updated-at">Just now</dd>
+              <dt>Model</dt><dd id="prediction-model-name">Loading local model</dd>
+              <dt>Last analyzed</dt><dd id="prediction-updated-at">Loading</dd>
               <dt>Confidence</dt><dd>Not calibrated</dd>
               <dt>Evidence source</dt><dd><a id="trial-source-link" href="#" target="_blank" rel="noreferrer">ClinicalTrials.gov</a></dd>
             </dl>
@@ -321,7 +341,7 @@
         <div id="file-extraction-status" class="file-extraction-status" role="status">Word, PDF, RTF, ODT, PowerPoint, Excel, HTML, and text/data files up to 25 MB.</div>
         <label>Protocol text<textarea id="protocol-text" required>Phase 2 protocol evaluating an investigational therapy in adults with a rare disease.</textarea></label>
         <div class="fields two-up">
-          <label>Trial2Vec anchor NCT<input id="anchor-nct" value="NCT02545127" required></label>
+          <label>Trial2Vec anchor<input id="anchor-nct" list="anchor-trials" value="NCT02545127" placeholder="Search by trial, indication, or NCT" required></label>
           <label>Indication<input id="indication" value="Rare disease"></label>
           <label>Phase<input id="study-phase" value="PHASE2"></label>
           <label>Population<input id="population" value="Adults"></label>
@@ -337,14 +357,17 @@
           <p class="eyebrow">Candidate B</p>
           <label>Protocol text<textarea id="protocol-text-b">Alternative protocol design for the same indication.</textarea></label>
           <div class="fields two-up">
-            <label>Trial2Vec anchor NCT<input id="anchor-nct-b" value="NCT02545127"></label>
+            <label>Trial2Vec anchor<input id="anchor-nct-b" list="anchor-trials" value="NCT02545127" placeholder="Search by trial, indication, or NCT"></label>
             <label>Planned enrollment<input id="planned-enrollment-b" type="number" min="1" value="120"></label>
           </div>
         </section>
-        <button id="submit-comparison" class="submit-button" type="submit">Open in text editor</button>
+        <datalist id="anchor-trials"></datalist>
+        <button id="submit-comparison" class="submit-button" type="submit">Upload Trial</button>
       </form>
     </dialog>
-    <script src="/static/auth.js?v=20260813-3"></script>
-    <script src="/static/app.js?v=20260813-3"></script>
+    <script src="/static/auth.js?v=20260813-4"></script>
+    <script src="/static/trial-scorer.js?v=20260813-4"></script>
+    <script src="/static/trial-embedding-scorer.js?v=20260813-4"></script>
+    <script src="/static/app.js?v=20260813-4"></script>
   </body>
 </html>
