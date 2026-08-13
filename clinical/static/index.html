@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BioStonk Clinical Compute</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260813-2">
+    <link rel="stylesheet" href="/static/styles.css?v=20260813-3">
   </head>
   <body>
-      <div id="login-shell" class="login-shell">
+    <div id="login-shell" class="login-shell">
       <div class="login-card">
         <div class="login-brand">
           <a class="brand" href="#" aria-label="BioStonk home">BIO<span>STONK</span></a>
@@ -321,13 +321,7 @@
         <div id="file-extraction-status" class="file-extraction-status" role="status">Word, PDF, RTF, ODT, PowerPoint, Excel, HTML, and text/data files up to 25 MB.</div>
         <label>Protocol text<textarea id="protocol-text" required>Phase 2 protocol evaluating an investigational therapy in adults with a rare disease.</textarea></label>
         <div class="fields two-up">
-          <label class="anchor-field">Trial2Vec anchor
-            <div class="anchor-combobox" id="anchor-combobox-a">
-              <input type="text" class="anchor-search" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="anchor-list-a" aria-activedescendant="" placeholder="Search NCT ID or title">
-              <input type="hidden" id="anchor-nct" value="NCT02545127">
-              <ul id="anchor-list-a" class="anchor-list" role="listbox" aria-label="Trial2Vec anchor trials"></ul>
-            </div>
-          </label>
+          <label>Trial2Vec anchor NCT<input id="anchor-nct" value="NCT02545127" required></label>
           <label>Indication<input id="indication" value="Rare disease"></label>
           <label>Phase<input id="study-phase" value="PHASE2"></label>
           <label>Population<input id="population" value="Adults"></label>
@@ -343,20 +337,14 @@
           <p class="eyebrow">Candidate B</p>
           <label>Protocol text<textarea id="protocol-text-b">Alternative protocol design for the same indication.</textarea></label>
           <div class="fields two-up">
-            <label class="anchor-field">Trial2Vec anchor
-              <div class="anchor-combobox" id="anchor-combobox-b">
-                <input type="text" class="anchor-search" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="anchor-list-b" aria-activedescendant="" placeholder="Search NCT ID or title">
-                <input type="hidden" id="anchor-nct-b" value="NCT02545127">
-                <ul id="anchor-list-b" class="anchor-list" role="listbox" aria-label="Trial2Vec anchor trials"></ul>
-              </div>
-            </label>
+            <label>Trial2Vec anchor NCT<input id="anchor-nct-b" value="NCT02545127"></label>
             <label>Planned enrollment<input id="planned-enrollment-b" type="number" min="1" value="120"></label>
           </div>
         </section>
-        <button id="submit-comparison" class="submit-button" type="submit">Run trial comparison</button>
+        <button id="submit-comparison" class="submit-button" type="submit">Open in text editor</button>
       </form>
     </dialog>
-    <script src="/static/auth.js?v=20260813-2"></script>
-    <script src="/static/app.js?v=20260813-2"></script>
+    <script src="/static/auth.js?v=20260813-3"></script>
+    <script src="/static/app.js?v=20260813-3"></script>
   </body>
 </html>
