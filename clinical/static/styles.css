@@ -400,7 +400,7 @@ textarea { min-height: 128px; resize: vertical; line-height: 1.5; }
 .google-button:hover, .google-button:focus-visible { border-color: var(--line-strong); background: var(--surface-raised); outline: none; }
 .google-icon { width: 16px; height: 16px; }
 .login-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-#firebase-email-form { margin-top: 14px; }
+#create-account-form { padding-top: 26px; }
 
 /* Header actions */
 .header-actions { justify-self: end; display: flex; align-items: center; gap: 14px; }

@@ -367,7 +367,7 @@ function updateAuthUI(user) {
     dashboardShell.classList.add("hidden");
     if (userDisplay) userDisplay.textContent = "";
     setError("demo-login-error", "");
-    setError("firebase-login-error", "");
+    setError("create-account-error", "");
   }
 }
 
@@ -386,39 +386,27 @@ function attachDemoLogin() {
   });
 }
 
-function attachFirebaseLogin() {
+function attachCreateAccount() {
   const googleButton = document.getElementById("google-signin-button");
   if (googleButton) {
     googleButton.addEventListener("click", async () => {
-      setError("firebase-login-error", "");
+      setError("create-account-error", "");
       const result = await authManager.firebaseGoogleLogin();
-      if (!result.success) setError("firebase-login-error", result.error);
+      if (!result.success) setError("create-account-error", result.error);
     });
   }
 
-  const emailForm = document.getElementById("firebase-email-form");
-  if (emailForm) {
-    emailForm.addEventListener("submit", async (event) => {
+  const createAccountForm = document.getElementById("create-account-form");
+  if (createAccountForm) {
+    createAccountForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      setError("firebase-login-error", "");
-      const result = await authManager.firebaseEmailLogin(
-        getValue("firebase-email"),
-        getValue("firebase-password")
-      );
-      if (!result.success) setError("firebase-login-error", result.error);
-    });
-  }
-
-  const createButton = document.getElementById("firebase-create-account-button");
-  if (createButton) {
-    createButton.addEventListener("click", async () => {
-      setError("firebase-login-error", "");
+      setError("create-account-error", "");
       const result = await authManager.firebaseCreateAccount(
-        getValue("firebase-email"),
-        getValue("firebase-password"),
-        getValue("firebase-name")
+        getValue("create-account-email"),
+        getValue("create-account-password"),
+        getValue("create-account-name")
       );
-      if (!result.success) setError("firebase-login-error", result.error);
+      if (!result.success) setError("create-account-error", result.error);
     });
   }
 }
@@ -435,7 +423,7 @@ function attachSignOut() {
 function initAuthUI() {
   authManager.init(updateAuthUI);
   attachDemoLogin();
-  attachFirebaseLogin();
+  attachCreateAccount();
   attachSignOut();
 }
 
