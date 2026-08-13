@@ -22,6 +22,68 @@ firebase deploy --only hosting
 
 Only static files in `clinical/static` should be deployed. Python sources and dataset artifacts are excluded by `firebase.json` and `.firebaseignore`.
 
+## Login gate
+
+The clinical UI now requires authentication before showing the dashboard.
+
+### Demo login (default)
+
+A built-in demo account is active by default and works without any Firebase configuration:
+
+- **Username:** `pharmachute`
+- **Password:** `123`
+
+The demo session persists across page refreshes using `localStorage`.
+
+### Enabling Firebase Authentication
+
+To replace the demo account with real Google and email/password sign-in, enable Firebase Auth providers and add the project's web config.
+
+1. In the [Firebase Console](https://console.firebase.google.com/project/biostonk/authentication), go to **Authentication** → **Sign-in method**.
+2. Enable **Email/Password** and **Google**.
+3. Go to **Authentication** → **Settings** → **Authorized domains** and add:
+   - `localhost`
+   - `biostonk.web.app`
+4. Go to **Project settings** → **General** → **Your apps**, create a Web app if needed, and copy the Firebase config object.
+5. Paste the config into `clinical/static/auth.js`:
+
+```js
+const AUTH_CONFIG = {
+  demo: { ... },
+  firebase: {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "biostonk.firebaseapp.com",
+    projectId: "biostonk",
+    storageBucket: "biostonk.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  },
+};
+```
+
+Once `apiKey` is set, `auth.js` automatically switches from demo mode to Firebase Auth.
+
+### Enabling Firestore (for user profiles)
+
+When a user creates an account, their name and email are stored in Firestore under `users/{uid}`. Passwords are never stored in Firestore.
+
+1. In the [Firebase Console](https://console.firebase.google.com/project/biostonk/firestore), go to **Firestore Database** → **Create database**.
+2. Start in **test mode** for development, then update security rules before production.
+3. A minimal rule set for this app is:
+
+```text
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```
+
+This lets authenticated users read and write only their own profile document.
+
 ## GitHub Actions deploy
 
 The workflow in `.github/workflows/firebase-hosting-deploy.yml` deploys on pushes to `main` when static files or Firebase config change.
